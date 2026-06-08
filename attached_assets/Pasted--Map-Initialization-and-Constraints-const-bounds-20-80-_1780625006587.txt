@@ -1,0 +1,43 @@
+// Map Initialization and Constraints
+const bounds = [[20.80, -158.45], [21.75, -156.45]];
+var map = L.map('map', { 
+    zoomControl: false, 
+    interactive: false, 
+    attributionControl: false,
+    minZoom: 10, 
+    maxZoom: 10, 
+    maxBounds: bounds, 
+    maxBoundsViscosity: 1.0 
+}).setView([21.265, -157.785], 10);
+
+// Layer Panes for Strict Depth Ordering
+map.createPane('depthPane');   map.getPane('depthPane').style.zIndex = 200;
+map.createPane('windPane');    map.getPane('windPane').style.zIndex = 300;
+map.createPane('radarPane');   map.getPane('radarPane').style.zIndex = 350; map.getPane('radarPane').style.opacity = 0.65;
+map.createPane('surfPane');    map.getPane('surfPane').style.zIndex = 450;
+map.createPane('trafficPane'); map.getPane('trafficPane').style.zIndex = 500;
+map.createPane('poiPane');     map.getPane('poiPane').style.zIndex = 600;
+
+// Base Layers
+L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Ocean/World_Ocean_Base/MapServer/tile/{z}/{y}/{x}', { maxZoom: 13 }).addTo(map);
+L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}', { maxZoom: 18, className: 'blend-multiply' }).addTo(map);
+
+// Initialize Layer Groups
+var depthLayer = L.layerGroup().addTo(map); 
+var radarLayer = L.tileLayer('https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/nexrad-n0q-900913/{z}/{x}/{y}.png', { pane: 'radarPane' });
+var windLayer = L.layerGroup();
+var surfLayer = L.layerGroup();
+var trafficLayer = L.layerGroup();
+var buoyLayer = L.layerGroup();
+var envLayer = L.layerGroup();
+
+// 1. CURATED DEPTH SOUNDINGS
+const curatedDepths = [
+    { c: [21.46, -157.82], d: "14" }, { c: [21.43, -157.78], d: "45" }, { c: [21.41, -157.73], d: "35" },
+    { c: [21.30, -157.98], d: "15" }, { c: [21.26, -157.94], d: "65" }, { c: [21.260, -157.845], d: "18" }, 
+    { c: [21.242, -157.820], d: "65" }, { c: [21.230, -157.720], d: "210" },
+    { c: [21.43, -158.22], d: "75" }, { c: [21.33, -158.15], d: "85" }, { c: [21.28, -158.13], d: "120" },
+    { c: [21.62, -158.13], d: "80" }, { c: [21.64, -158.07], d: "45" }, { c: [21.68, -158.05], d: "110" }, 
+    { c: [21.07, -157.20], d: "22" }, { c: [21.06, -157.10], d: "18" }, { c: [21.06, -156.90], d: "25" }, 
+    { c: [21.05, -157.28], d: "65" }, { c: [21.03, -157.15], d: "90" },
+    { c: [21.160, -156.710], d: "85" }, { c: [21.180, -156.750], d: "120" }, { c: [21.200, -156.800], d: "240" },

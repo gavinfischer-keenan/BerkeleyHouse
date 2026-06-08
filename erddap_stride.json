@@ -1,0 +1,14 @@
+﻿{
+  "table": {
+    "columnNames": ["time", "latitude", "longitude", "Uwind"],
+    "columnTypes": ["String", "float", "float", "float"],
+    "columnUnits": ["UTC", "degrees_north", "degrees_east", "meter second-1"],
+    "rows": [
+      ["2026-06-13T00:00:00Z", 20.495, -159.49, -4.140307],
+      ["2026-06-13T00:00:00Z", 20.495, -159.19, -3.9617984],
+      ["2026-06-13T00:00:00Z", 20.77, -159.49, -3.7651007],
+      ["2026-06-13T00:00:00Z", 20.77, -159.19, -3.344962]
+    ]
+  }
+}
+

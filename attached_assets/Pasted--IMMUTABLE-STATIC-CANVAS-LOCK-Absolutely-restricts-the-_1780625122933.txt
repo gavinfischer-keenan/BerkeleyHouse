@@ -1,0 +1,85 @@
+// --- IMMUTABLE STATIC CANVAS LOCK ---
+// Absolutely restricts the map view to the exact 72-inch bounding box parameters.
+const bounds = [
+    [20.80, -158.45], // Bottom Left (Southwest)
+    [21.75, -156.45]  // Top Right (Northeast)
+];
+
+var map = L.map('map', { 
+    zoomControl: false, 
+    interactive: false, 
+    attributionControl: false,
+    minZoom: 10,
+    maxZoom: 10, 
+    maxBounds: bounds, 
+    maxBoundsViscosity: 1.0 
+}).setView([21.265, -157.785], 10);
+
+// --- STRICT Z-INDEX HIERARCHY ---
+// 200: Background Depths (Cannot swamp labels)
+// 300: Wind/Radar Overlays
+// 400: Current Vectors
+// 500: Surf/Traffic Data
+// 600: Buoys/Stations (Always top level)
+
+map.createPane('depthPane');    map.getPane('depthPane').style.zIndex = 200;
+map.createPane('windPane');     map.getPane('windPane').style.zIndex = 300;
+map.createPane('radarPane');    map.getPane('radarPane').style.zIndex = 350; map.getPane('radarPane').style.opacity = 0.65;
+map.createPane('currentPane');  map.getPane('currentPane').style.zIndex = 400;
+map.createPane('trafficPane');  map.getPane('trafficPane').style.zIndex = 500;
+map.createPane('surfPane');     map.getPane('surfPane').style.zIndex = 550;
+map.createPane('poiPane');      map.getPane('poiPane').style.zIndex = 600;
+
+// --- MAP TILES ---
+L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Ocean/World_Ocean_Base/MapServer/tile/{z}/{y}/{x}', { maxZoom: 13 }).addTo(map);
+L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}', { maxZoom: 18, className: 'blend-multiply' }).addTo(map);
+
+// --- LAYER GROUPS ---
+var depthLayer = L.layerGroup().addTo(map); 
+var radarLayer = L.tileLayer('https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/nexrad-n0q-900913/{z}/{x}/{y}.png', { pane: 'radarPane' });
+var windLayer = L.layerGroup();
+var currentLayer = L.layerGroup();
+var surfLayer = L.layerGroup();
+var trafficLayer = L.layerGroup();
+var staticPoiLayer = L.layerGroup().addTo(map);
+var envLayer = L.layerGroup();
+
+// --- 1. HYBRID BATHYMETRY: CURATED COASTAL EDGES ---
+const curatedDepths = [
+    // Kaneohe Bay & Kailua
+    { c: [21.46, -157.82], d: "14" }, { c: [21.43, -157.78], d: "45" }, { c: [21.41, -157.73], d: "35" },
+    // Pearl Harbor Approach & South Shore
+    { c: [21.30, -157.98], d: "15" }, { c: [21.26, -157.94], d: "65" }, { c: [21.260, -157.845], d: "18" }, 
+    { c: [21.242, -157.820], d: "65" }, { c: [21.230, -157.720], d: "210" },
+    // Waianae Coast
+    { c: [21.43, -158.22], d: "75" }, { c: [21.33, -158.15], d: "85" }, { c: [21.28, -158.13], d: "120" },
+    // North Shore / Haleiwa
+    { c: [21.62, -158.13], d: "80" }, { c: [21.64, -158.07], d: "45" }, { c: [21.68, -158.05], d: "110" }, 
+    // Molokai South Shore Reef
+    { c: [21.07, -157.20], d: "22" }, { c: [21.06, -157.10], d: "18" }, { c: [21.06, -156.90], d: "25" }, 
+    { c: [21.05, -157.28], d: "65" }, { c: [21.03, -157.15], d: "90" },
+    // Molokai Halawa & North
+    { c: [21.160, -156.710], d: "85" }, { c: [21.180, -156.750], d: "120" }, { c: [21.200, -156.800], d: "240" },
+    // Channel & Penguin Bank Key Slopes
+    { c: [21.185, -157.840], d: "510" }, { c: [21.225, -157.695], d: "310" }, { c: [21.190, -157.640], d: "590" },
+    { c: [20.950, -157.250], d: "55" }, { c: [20.900, -157.300], d: "62" }, { c: [21.000, -157.150], d: "95" }
+];
+
+curatedDepths.forEach(s => {
+    L.marker(s.c, { pane: 'depthPane', icon: L.divIcon({ className: 'depth-label', html: s.d, iconSize: [40, 15] }) }).addTo(depthLayer);
+});
+
+// --- HYBRID BATHYMETRY: ORGANIC SCATTER ALGORITHM ---
+function inCuratedZone(lat, lng) {
+    return (lat > 20.95 && lat < 21.75 && lng > -158.3 && lng < -156.6); // Exclude entire island/nearshore blocks from random generation
+}
+
+// Sparser Abyssal Generator
+for (let lat = bounds[0][0]; lat <= bounds[1][0]; lat += 0.12) {
+    for (let lng = bounds[0][1]; lng <= bounds[1][1]; lng += 0.18) {
+        if (!inCuratedZone(lat, lng)) {
+            let jLat = lat + (Math.random() - 0.5) * 0.05;
+            let jLng = lng + (Math.random() - 0.5) * 0.05;
+            let depth = 1100 + Math.floor(Math.abs(21.26 - jLat) * 1300) + Math.floor(Math.abs(-157.78 - jLng) * 1100);
+            L.marker([jLat, jLng], { 
+                pane: 'depthPane', icon: L.divIcon({ className: 'depth-label', html: depth.toString(), iconSize: [40,

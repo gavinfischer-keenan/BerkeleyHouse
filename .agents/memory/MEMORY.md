@@ -1,0 +1,1 @@
+- [Node WebSocket Blob frames](node-websocket-blob-frames.md) — native Node WebSocket delivers binary frames as Blob; `String(ev.data)` silently breaks JSON.parse → "connected but zero messages". Decode with `await blob.text()`.

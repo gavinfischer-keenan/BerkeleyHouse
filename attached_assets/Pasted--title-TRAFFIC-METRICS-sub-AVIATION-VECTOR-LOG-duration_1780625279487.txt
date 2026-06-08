@@ -1,0 +1,72 @@
+{ 
+        title: "TRAFFIC METRICS", sub: "AVIATION VECTOR LOG", duration: 3000,
+        layersOn: [trafficLayer], layersOff: [radarLayer, windLayer, buoyLayer, envLayer], warn: false,
+        html: `
+            <div class="data-list">
+                <div class="data-row" style="border-left-color: #10ac84;">
+                    <div><div class="row-primary">HAL12 (A330)</div><div class="row-secondary">HNL ➔ LAX</div></div>
+                    <div class="row-meta">FL310<br><span style="font-size:0.75em; color:#a4b0be;">475 kts</span></div>
+                </div>
+                <div class="data-row" style="border-left-color: #10ac84;">
+                    <div><div class="row-primary">SWA453 (B738)</div><div class="row-secondary">OAK ➔ HNL</div></div>
+                    <div class="row-meta">4,200ft<br><span style="font-size:0.75em; color:#a4b0be;">180 kts</span></div>
+                </div>
+            </div>`
+    },
+    { 
+        title: "TRAFFIC METRICS", sub: "MARITIME VESSEL LOG", duration: 3000,
+        layersOn: [trafficLayer], layersOff: [radarLayer, windLayer, buoyLayer, envLayer], warn: false,
+        html: `
+            <div class="data-list">
+                <div class="data-row" style="border-left-color: #0984e3;">
+                    <div><div class="row-primary">MATSON NAVIGATOR</div><div class="row-secondary">Commercial Cargo Fleet</div></div>
+                    <div class="row-meta">16.2 kt</div>
+                </div>
+                <div class="data-row" style="border-left-color: #0984e3;">
+                    <div><div class="row-primary">LAHAINA CRUISER</div><div class="row-secondary">Passenger Ferry</div></div>
+                    <div class="row-meta">22.4 kt</div>
+                </div>
+            </div>`
+    },
+    {
+        title: "BIOSPHERE", sub: "REGIONAL SEISMIC & STRIKES", duration: 6000,
+        layersOn: [envLayer], layersOff: [radarLayer, windLayer, buoyLayer, trafficLayer], warn: false,
+        html: `
+            <div class="data-list">
+                <div class="data-row" style="border-left-color: #ff9f43;">
+                    <div><div class="row-primary">Blitzortung Array</div><div class="row-secondary">Kaiwi Channel Strike</div></div>
+                    <div class="row-meta">1 min ago</div>
+                </div>
+                <div class="data-row" style="border-left-color: #ee5253;">
+                    <div><div class="row-primary">USGS Fault Monitor</div><div class="row-secondary">Micro-Quake (Lanai)</div></div>
+                    <div class="row-meta">1.8 Mag</div>
+                </div>
+            </div>`
+    }
+];
+
+let currentStateIndex = 0;
+
+function transitionState() {
+    let state = uiStates[currentStateIndex];
+    
+    document.getElementById('tab-title').innerText = state.title;
+    document.getElementById('sub-indicator').innerText = state.sub;
+    document.getElementById('panel-content').innerHTML = state.html;
+    
+    const dash = document.getElementById('main-dash');
+    if(state.warn) dash.classList.add('warning-active');
+    else dash.classList.remove('warning-active');
+
+    // Toggle layer configurations visibility cleanly
+    state.layersOn.forEach(l => { if(!map.hasLayer(l)) map.addLayer(l); });
+    state.layersOff.forEach(l => { if(map.hasLayer(l)) map.removeLayer(l); });
+
+    setTimeout(() => {
+        currentStateIndex = (currentStateIndex + 1) % uiStates.length;
+        transitionState();
+    }, state.duration);
+}
+
+// Start Engine Execution
+transitionState();

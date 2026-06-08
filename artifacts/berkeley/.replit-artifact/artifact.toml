@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/"
+title = "Honolulu Command Center"
+version = "1.0.0"
+id = "artifacts/honolulu"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 19699
+
+[services.development]
+run = "pnpm --filter @workspace/honolulu run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/honolulu", "run", "build" ]
+publicDir = "artifacts/honolulu/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "19699"
+BASE_PATH = "/"

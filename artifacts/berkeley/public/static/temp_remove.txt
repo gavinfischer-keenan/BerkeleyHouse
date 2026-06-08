@@ -1,0 +1,17 @@
+
+    // ── 2: TRAFFIC — COMBINED (WIDE) ──────────────────────────────────
+    {
+        title: "TRAFFIC — COMBINED", sub: "FLIGHT & VESSEL TRACKING", perPageMs: 3500,
+        layersOn:  [airLayer, shipLayer, airportLayer],
+        layersOff: [radarLayerGroup, aqiLayer, buoyLayer, quakeLayer, lightningLayer, denseDepthLayer],
+        getItems: getTrafficItems, renderItem: renderTrafficItem
+    },
+    // ── 3: TRAFFIC — COMBINED (harbor approach zoom-in) ───────────────
+    {
+        title: "TRAFFIC — COMBINED", sub: "HONOLULU HARBOR APPROACH", perPageMs: 3500,
+        view: 'harbor',
+        layersOn:  [airLayer, shipLayer, denseDepthLayer, airportLayer, radarLayerGroup],
+        layersOff: [aqiLayer, buoyLayer, quakeLayer, lightningLayer],
+        getItems: getTrafficItems, renderItem: renderTrafficItem,
+        pageSize: 8,
+        holdExtraMs: 3000,   // linger on the last page so the zoom is appreciated

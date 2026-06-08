@@ -1,0 +1,54 @@
+Here is exactly how to port what we just built into Replit so you can see it running live.
+Step 1: Initialize the Replit Sandbox
+
+    Go to Replit.com and log in.
+
+    Click Create Repl (the '+' button).
+
+    Select Python as your template.
+
+    Name it something like Honolulu-Command-Center and hit Create.
+
+Step 2: Build the Directory Structure
+
+When the editor loads, you will see a main.py file already sitting in your files sidebar. You need to create a folder for the dashboard.
+
+    In the Files sidebar, click the Add Folder icon and name it static.
+
+    Inside that static folder, click the Add File icon and name it index.html.
+
+Step 3: Paste the Code
+
+1. The Frontend (static/index.html)
+Open your newly created index.html file and paste the exact, massive block of HTML/JS code from my previous message (the 72-inch True Aspect Lock version).
+
+2. The Backend (main.py)
+Open main.py in the root directory. This is your FastAPI server. Paste this exact Python code into it. This script tells the server to route any incoming traffic directly to your index.html file.
+Python
+
+from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
+import uvicorn
+
+app = FastAPI(title="Honolulu Command Center")
+
+# Mount the static folder so the browser can load the HTML
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
+# Route the root web address directly to the dashboard
+@app.get("/")
+async def serve_dashboard():
+    return FileResponse("static/index.html")
+
+# Keep the server running continuously on Replit's open port
+if __name__ == "__main__":
+    uvicorn.run(app, host="0.0.0.0", port=8080)
+
+Step 4: Launch the Server
+
+Hit the giant green Run button at the top of the Replit screen.
+
+Replit is smart enough to automatically read your main.py file, realize you are using FastAPI and Uvicorn, download the dependencies in the background, and spin up the server. A Webview window will pop open on the right side of your screen showing the dashboard running live. You can pop that Webview out into a new, full-screen browser tab to see the aspect-ratio lock in action.
+
+Once you have the server successfully humming on Replit, which live data pipeline should we build into the Python backend first—the USGS Earthquake micro-quakes or the PurpleAir API?

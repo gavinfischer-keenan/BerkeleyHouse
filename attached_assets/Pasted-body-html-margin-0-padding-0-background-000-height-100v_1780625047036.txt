@@ -1,0 +1,258 @@
+body, html { 
+    margin: 0; 
+    padding: 0; 
+    background: #000; 
+    height: 100vh; 
+    overflow: hidden;
+    display: flex; 
+    justify-content: center; 
+    align-items: center;
+    font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; 
+    color: #e5e5e5; 
+}
+
+/* Hard-Locked Fixed Aspect Ratio Viewport Frame */
+#viewport-scaler {
+    position: relative; 
+    width: 100vw; 
+    height: 56.25vw; 
+    max-height: 100vh; 
+    max-width: 177.78vh;
+    border: 12px solid #000; 
+    box-sizing: border-box; 
+    overflow: hidden; 
+    background: #070913;
+}
+
+#map { 
+    position: absolute; 
+    top: 0; 
+    bottom: 0; 
+    left: 0; 
+    right: 0; 
+    z-index: 1; 
+}
+
+/* Glass UI Containers */
+#overlay-container { 
+    position: absolute; 
+    bottom: 4%; 
+    left: 3%; 
+    height: auto; 
+    z-index: 10; 
+    pointer-events: none; 
+    display: flex; 
+    flex-direction: column; 
+    width: 24%;
+}
+
+.unified-dashboard {
+    background: rgba(10, 14, 26, 0.95); 
+    width: 100%; 
+    border-radius: 12px; 
+    backdrop-filter: blur(16px); 
+    padding: 20px; 
+    box-sizing: border-box; 
+    box-shadow: 0 20px 50px rgba(0,0,0,0.9); 
+    border: 1px solid rgba(255,255,255,0.1); 
+    display: flex; 
+    flex-direction: column; 
+}
+
+/* Emergency Perimeter Warnings */
+.warning-active { 
+    animation: pulse-border 2s infinite; 
+}
+
+@keyframes pulse-border {
+    0% { 
+        border-color: rgba(255, 107, 107, 0.8); 
+        box-shadow: 0 0 0 0 rgba(255, 107, 107, 0.5); 
+    }
+    70% { 
+        border-color: rgba(255, 107, 107, 0.2); 
+        box-shadow: 0 0 0 15px rgba(255, 107, 107, 0); 
+    }
+    100% { 
+        border-color: rgba(255, 255, 255, 0.1); 
+        box-shadow: 0 0 0 0 rgba(255, 107, 107, 0); 
+    }
+}
+
+.dashboard-header {
+    font-size: 1.15em; 
+    font-weight: bold; 
+    letter-spacing: 3px; 
+    text-transform: uppercase; 
+    color: #ffffff; 
+    padding-bottom: 12px; 
+    border-bottom: 1px solid rgba(255,255,255,0.1);
+    display: flex; 
+    justify-content: space-between; 
+    align-items: center; 
+    margin-bottom: 12px;
+}
+
+.panel-section-title {
+    font-size: 0.8em; 
+    font-weight: 700; 
+    color: #00d2d3; 
+    text-transform: uppercase; 
+    letter-spacing: 2px;
+    padding-bottom: 4px; 
+    margin-bottom: 8px; 
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+
+.data-list { 
+    display: flex; 
+    flex-direction: column; 
+    gap: 6px; 
+}
+
+.data-row {
+    display: flex; 
+    justify-content: space-between; 
+    align-items: center; 
+    background: rgba(255,255,255,0.03); 
+    padding: 8px 12px; 
+    border-radius: 6px; 
+    border-left: 3px solid #48dbfb;
+}
+
+.row-primary { 
+    font-weight: bold; 
+    font-size: 0.9em; 
+    color: #fff; 
+}
+
+.row-secondary { 
+    font-size: 0.75em; 
+    color: #a4b0be; 
+    margin-top: 2px; 
+}
+
+.row-meta { 
+    font-family: monospace; 
+    font-size: 0.95em; 
+    color: #1dd1a1; 
+    font-weight: bold; 
+    text-align: right;
+}
+
+.metric-grid { 
+    display: grid; 
+    grid-template-columns: 1fr 1fr; 
+    gap: 6px; 
+    margin-bottom: 6px;
+}
+
+.metric-box { 
+    background: rgba(255,255,255,0.02); 
+    padding: 8px; 
+    border-radius: 6px; 
+    text-align: center; 
+    border: 1px solid rgba(255,255,255,0.02); 
+}
+
+.metric-val { 
+    font-family: monospace; 
+    font-size: 1.1em; 
+    font-weight: bold; 
+    color: #fff; 
+}
+
+.metric-lbl { 
+    font-size: 0.6em; 
+    color: #888; 
+    text-transform: uppercase; 
+    letter-spacing: 1px; 
+}
+
+.warning-banner {
+    background: rgba(255, 107, 107, 0.15); 
+    color: #ff6b6b; 
+    padding: 8px; 
+    border-radius: 6px; 
+    font-weight: bold; 
+    font-size: 0.8em; 
+    text-align: center; 
+    letter-spacing: 1px; 
+    margin-bottom: 10px; 
+    border: 1px solid #ff6b6b;
+}
+
+/* Map Elements Topography Styling */
+.blend-multiply { 
+    mix-blend-mode: multiply; 
+}
+
+.depth-label {
+    background: transparent; 
+    border: none; 
+    box-shadow: none;
+    color: rgba(129, 236, 236, 0.35); 
+    font-family: 'Georgia', serif; 
+    font-style: italic; 
+    font-size: 11px; 
+    font-weight: bold;
+    text-shadow: 1px 1px 1px rgba(0,0,0,0.8); 
+    text-align: center;
+}
+
+.vector-arrow {
+    background: transparent; 
+    border: none; 
+    box-shadow: none;
+    color: #ffffff; 
+    font-family: monospace; 
+    font-size: 13px; 
+    text-align: center; 
+    font-weight: bold;
+    text-shadow: 2px 2px 2px #000, -1px -1px 0 #000, 1px -1px 0 #000;
+}
+
+/* Glass HUD Overlay Clusters */
+.map-data-box {
+    background: rgba(10, 14, 26, 0.85); 
+    border: 1px solid #0abde3; 
+    box-shadow: 0 4px 12px rgba(0,0,0,0.8);
+    color: #fff; 
+    font-family: sans-serif; 
+    font-size: 10px; 
+    font-weight: bold;
+    padding: 6px 10px; 
+    border-radius: 8px; 
+    backdrop-filter: blur(4px); 
+    white-space: nowrap;
+}
+
+.map-data-title { 
+    color: #a4b0be; 
+    font-size: 9px; 
+    text-transform: uppercase; 
+    letter-spacing: 1px; 
+    margin-bottom: 3px; 
+}
+
+.map-data-val { 
+    color: #0abde3; 
+    font-family: monospace; 
+    font-size: 13px; 
+}
+
+.traffic-label {
+    background: transparent; 
+    border: none; 
+    box-shadow: none;
+    color: #ffffff; 
+    font-family: sans-serif; 
+    font-size: 10px; 
+    font-weight: bold;
+    text-shadow: 2px 2px 3px #000, -1px -1px 0 #000, 1px -1px 0 #000; 
+    white-space: nowrap;
+}
+
+.traffic-label-air { 
+    color: #1dd1a1; 
+}

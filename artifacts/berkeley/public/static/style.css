@@ -1,0 +1,837 @@
+body, html { 
+    margin: 0; 
+    padding: 0; 
+    background: #000; 
+    height: 100vh; 
+    overflow: hidden;
+    display: flex; 
+    justify-content: center; 
+    align-items: center;
+    font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; 
+    color: #e5e5e5; 
+}
+
+/* Hard-Locked Fixed Aspect Ratio Viewport Frame */
+#viewport-scaler {
+    position: relative; 
+    width: 1920px; 
+    height: 1080px; 
+    border: 12px solid #000; 
+    box-sizing: border-box; 
+    overflow: hidden; 
+    background: #070913;
+    transform-origin: center center;
+    flex-shrink: 0;
+}
+
+#map { 
+    position: absolute; 
+    top: 0; 
+    bottom: 0; 
+    left: 0; 
+    right: 0; 
+    z-index: 1; 
+}
+
+/* Glass UI Containers */
+#overlay-container { 
+    position: absolute; 
+    top: 4%; 
+    right: 3%; 
+    height: auto; 
+    z-index: 10; 
+    pointer-events: none; 
+    display: flex; 
+    flex-direction: column; 
+    width: 46%;
+    transition: all 0.6s cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+#overlay-container.state-hazard {
+    top: auto;
+    bottom: 1%;
+    left: 1%;
+    right: auto;
+    width: auto;
+    max-width: 50%;
+}
+
+#overlay-container.state-hazard #panel-content {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    align-items: stretch;
+}
+
+#overlay-container.state-hazard .hazard-legend {
+    flex: 0 0 160px;
+    margin-bottom: 0 !important;
+}
+
+
+#overlay-container.state-hazard .data-row {
+    padding: 4px 6px !important;
+}
+
+#overlay-container.state-hazard .row-primary {
+    font-size: 10px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+#overlay-container.state-hazard .row-secondary {
+    font-size: 8px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+#overlay-container.state-hazard .row-meta {
+    font-size: 10px;
+}
+
+
+#overlay-container.state-surf {
+    width: 28%;
+}
+
+.unified-dashboard {
+    background: rgba(10, 14, 26, 0.95); 
+    width: 100%; 
+    border-radius: 12px; 
+    backdrop-filter: blur(16px); 
+    padding: 16px; 
+    box-sizing: border-box; 
+    box-shadow: 0 20px 50px rgba(0,0,0,0.9); 
+    border: 1px solid rgba(255,255,255,0.1); 
+    display: flex; 
+    flex-direction: column; 
+}
+
+/* Emergency Perimeter Warnings */
+.warning-active { 
+    animation: pulse-border 2s infinite; 
+}
+
+@keyframes pulse-border {
+    0% { 
+        border-color: rgba(255, 107, 107, 0.8); 
+        box-shadow: 0 0 0 0 rgba(255, 107, 107, 0.5); 
+    }
+    70% { 
+        border-color: rgba(255, 107, 107, 0.2); 
+        box-shadow: 0 0 0 15px rgba(255, 107, 107, 0); 
+    }
+    100% { 
+        border-color: rgba(255, 255, 255, 0.1); 
+        box-shadow: 0 0 0 0 rgba(255, 107, 107, 0); 
+    }
+}
+
+.dashboard-header {
+    font-size: 0.95em; 
+    font-weight: bold; 
+    letter-spacing: 3px; 
+    text-transform: uppercase; 
+    color: #ffffff; 
+    padding-bottom: 8px; 
+    border-bottom: 1px solid rgba(255,255,255,0.1);
+    display: flex; 
+    justify-content: space-between; 
+    align-items: center; 
+    margin-bottom: 8px;
+}
+
+.panel-section-title {
+    font-size: 0.7em; 
+    font-weight: 700; 
+    color: #00d2d3; 
+    text-transform: uppercase; 
+    letter-spacing: 2px;
+    padding-bottom: 4px; 
+    margin-bottom: 6px; 
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+
+.data-list { 
+    display: grid; 
+    grid-template-columns: repeat(4, 1fr); 
+    gap: 6px; 
+    align-content: start;
+}
+/* A list with a single row spans both columns instead of leaving a gap */
+.data-list > .data-row:only-child { grid-column: 1 / -1; }
+
+.data-row {
+    display: flex; 
+    justify-content: space-between; 
+    align-items: center; 
+    background: rgba(255,255,255,0.03); 
+    padding: 8px 12px; 
+    border-radius: 6px; 
+    border-left: 3px solid #48dbfb;
+}
+
+.row-primary { 
+    font-weight: bold; 
+    font-size: 0.75em; 
+    color: #fff; 
+}
+
+.row-secondary { 
+    font-size: 0.6em; 
+    color: #a4b0be; 
+    margin-top: 2px; 
+}
+
+.row-meta { 
+    font-family: monospace; 
+    font-size: 0.8em; 
+    color: #1dd1a1; 
+    font-weight: bold; 
+    text-align: right;
+}
+
+.metric-grid { 
+    display: grid; 
+    grid-template-columns: 1fr 1fr; 
+    gap: 6px; 
+    margin-bottom: 6px;
+}
+
+.metric-box { 
+    background: rgba(255,255,255,0.02); 
+    padding: 8px; 
+    border-radius: 6px; 
+    text-align: center; 
+    border: 1px solid rgba(255,255,255,0.02); 
+}
+
+.metric-val { 
+    font-family: monospace; 
+    font-size: 1.0em; 
+    font-weight: bold; 
+    color: #fff; 
+}
+
+.metric-lbl { 
+    font-size: 0.55em; 
+    color: #888; 
+    text-transform: uppercase; 
+    letter-spacing: 1px; 
+}
+
+.warning-banner {
+    background: rgba(255, 107, 107, 0.15); 
+    color: #ff6b6b; 
+    padding: 8px; 
+    border-radius: 6px; 
+    font-weight: bold; 
+    font-size: 0.8em; 
+    text-align: center; 
+    letter-spacing: 1px; 
+    margin-bottom: 10px; 
+    border: 1px solid #ff6b6b;
+}
+
+/* Map Elements Topography Styling */
+.blend-multiply { 
+    mix-blend-mode: multiply; 
+}
+
+.depth-label {
+    background: transparent; 
+    border: none; 
+    box-shadow: none;
+    color: rgba(129, 236, 236, 0.35); 
+    font-family: 'Georgia', serif; 
+    font-style: italic; 
+    font-size: 11px; 
+    font-weight: bold;
+    text-shadow: 1px 1px 1px rgba(0,0,0,0.8); 
+    text-align: center;
+}
+
+
+
+.current-arrow {
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    color: #2bd9ff;               /* brighter cyan */
+    font-family: monospace;
+    font-size: 28px;             /* was 16px */
+    line-height: 1;
+    text-align: center;
+    font-weight: bold;
+    -webkit-text-stroke: 0.6px #000;
+    text-shadow: 0 0 3px #000, 0 0 6px #000, 1px 1px 2px #000, -1px -1px 2px #000;
+}
+
+/* Glass HUD Overlay Clusters */
+.map-data-box {
+    background: rgba(10, 14, 26, 0.85); 
+    border: 1px solid #0abde3; 
+    box-shadow: 0 4px 12px rgba(0,0,0,0.8);
+    color: #fff; 
+    font-family: sans-serif; 
+    font-size: 10px; 
+    font-weight: bold;
+    padding: 6px 10px; 
+    border-radius: 8px; 
+    backdrop-filter: blur(4px); 
+    white-space: nowrap;
+}
+
+.map-data-title { 
+    color: #a4b0be; 
+    font-size: 9px; 
+    text-transform: uppercase; 
+    letter-spacing: 1px; 
+    margin-bottom: 3px; 
+}
+
+.map-data-val { 
+    color: #0abde3; 
+    font-family: monospace; 
+    font-size: 13px; 
+}
+
+.traffic-label {
+    background: transparent; 
+    border: none; 
+    box-shadow: none;
+    color: #ffffff; 
+    font-family: sans-serif; 
+    font-size: 10px; 
+    font-weight: bold;
+    text-shadow: 2px 2px 3px #000, -1px -1px 0 #000, 1px -1px 0 #000; 
+    white-space: nowrap;
+}
+
+.traffic-label-air { 
+    color: #1dd1a1; 
+}
+.deep-ocean-air {
+    color: #00d2d3;
+    font-size: 18.5px;
+    font-weight: 800;
+    text-shadow: 0 0 10px #00d2d3, 0 0 15px #00d2d3, -1px -1px 3px #000, 1px 1px 3px #000;
+    z-index: 1000 !important;
+}
+
+.surf-card {
+    background: rgba(7, 12, 24, 0.93);
+    border: 2px solid #1dd1a1;
+    border-radius: 6px;
+    padding: 3px 6px 2px;
+    backdrop-filter: blur(8px);
+    white-space: nowrap;
+    pointer-events: none;
+    min-width: 80px;
+}
+
+.surf-card-name {
+    font-size: 9px;
+    font-weight: 700;
+    color: #ffffff;
+    letter-spacing: 0.2px;
+    line-height: 1.2;
+}
+
+.surf-card-ht {
+    font-size: 14px;
+    font-weight: 900;
+    font-family: 'Courier New', Courier, monospace;
+    line-height: 1.15;
+    text-shadow: 0 0 6px currentColor;
+}
+
+/* Compact surf pin — the default marker outside the SURF & OCEAN view */
+.surf-pin {
+    display: inline-block;
+    background: rgba(7, 12, 24, 0.82);
+    border: 1px solid #1dd1a1;
+    border-radius: 4px;
+    padding: 1px 4px;
+    font-size: 9px;
+    font-weight: 700;
+    color: #e8eef7;
+    white-space: nowrap;
+    pointer-events: none;
+    text-shadow: 0 1px 2px #000;
+    transform: translateY(-50%);
+}
+.surf-pin b {
+    font-family: 'Courier New', Courier, monospace;
+    font-weight: 900;
+}
+
+
+
+.poi-label {
+    background: transparent; 
+    border: none; 
+    box-shadow: none;
+    color: #a4b0be; 
+    font-family: sans-serif; 
+    font-size: 9px; 
+    font-weight: bold;
+    text-shadow: 1px 1px 2px #000;
+    white-space: nowrap;
+}
+
+.surf-label {
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    color: #1dd1a1;
+    font-family: sans-serif;
+    font-size: 12.5px;
+    font-weight: bold;
+    text-shadow: 1px 1px 3px #000, -1px -1px 0 #000;
+    white-space: nowrap;
+}
+
+/* ── PANEL CONTENT HEIGHT CAP ─────────────────────────────────────────
+   Max 3 rows visible (3 × ~44px = 132px).
+   Overflow is hidden; the JS pagination engine handles the rest.   */
+#panel-content {
+    max-height: 172px;
+    overflow: hidden;
+}
+
+#overlay-container.state-traffic #panel-content {
+    max-height: 380px;
+}
+
+#overlay-container.state-surf #panel-content {
+    max-height: none;
+    overflow: visible;
+}
+
+.data-list {
+    gap: 5px;
+}
+
+/* Reduce row padding slightly so 3 fit cleanly inside the cap */
+.data-row {
+    padding: 5px 8px !important;
+}
+
+/* Page indicator shown when a panel has >3 items */
+.page-indicator {
+    text-align: right;
+    font-size: 0.68em;
+    color: #636e72;
+    letter-spacing: 1px;
+    margin-top: 3px;
+    font-family: monospace;
+}
+
+/* ── SURF MARKERS (animated on map) ───────────────────────────────── */
+.surf-marker {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    white-space: nowrap;
+}
+
+.surf-emoji {
+    font-size: 16px;
+    display: inline-block;
+    animation: surf-bob 1.8s ease-in-out infinite;
+    filter: drop-shadow(0 1px 3px rgba(0,0,0,0.9));
+}
+
+.surf-text {
+    font-size: 10px;
+    font-weight: bold;
+    color: #1dd1a1;
+    text-shadow: 1px 1px 3px #000, -1px -1px 0 #000;
+}
+
+@keyframes surf-bob {
+    0%, 100% { transform: translateY(0)   rotate(-4deg); }
+    50%       { transform: translateY(-4px) rotate(4deg); }
+}
+
+/* ── EARTHQUAKE MARKERS (animated pulsing ring) ───────────────────── */
+.quake-marker {
+    border-radius: 50%;
+    border: 2px solid;
+    background: transparent;
+    animation: quake-pulse 2s ease-out infinite;
+}
+
+@keyframes quake-pulse {
+    0%   { transform: scale(0.7); opacity: 1;   }
+    65%  { transform: scale(1.3); opacity: 0.4; }
+    100% { transform: scale(0.7); opacity: 1;   }
+}
+
+/* ── LIGHTNING MARKERS ────────────────────────────────────────────── */
+.lightning-marker {
+    font-size: 18px;
+    text-shadow: 0 0 6px #ffd32a, 1px 1px 3px #000;
+    animation: lightning-flash 1.4s ease-in-out infinite;
+    display: block;
+}
+
+@keyframes lightning-flash {
+    0%, 80%, 100% { opacity: 1;   }
+    40%           { opacity: 0.2; }
+}
+
+/* ── DENSE DEPTH LABELS (traffic zoom-in view) ───────────────────── */
+.depth-label-dense {
+    color: #8395a7;
+    font-size: 11.5px;
+    font-family: 'Times New Roman', Georgia, serif;
+    font-weight: normal;
+    font-style: italic;
+    text-shadow: 1px 1px 2px rgba(0,0,0,0.4);
+}
+.depth-label-dense sub {
+    font-size: 8px;
+    position: relative;
+    top: 2px;
+    left: 1px;
+}
+
+/* ── HELICOPTER traffic labels ────────────────────────────────────── */
+.traffic-label-helo {
+    color: #ffd32a;
+}
+
+/* 🟢 HARBOR ZOOM OVERRIDES 🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢 */
+.harbor-zoom .traffic-label {
+    font-size: 18.5px;
+    font-weight: 800;
+    text-shadow: 0 0 10px currentColor, -1px -1px 3px #000, 1px 1px 3px #000;
+    z-index: 1000 !important;
+}
+
+/* 🟢 BUOY HUD BOXES 🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢 */
+.buoy-box {
+    background: rgba(10, 14, 26, 0.88);
+    border: 1px solid #0abde3;
+    border-radius: 5px;
+    padding: 2px 6px;
+    backdrop-filter: blur(4px);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.7);
+    white-space: nowrap;
+}
+
+.buoy-name {
+    font-size: 8px;
+    color: #a4b0be;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.buoy-val {
+    font-size: 10px;
+    font-weight: bold;
+    color: #0abde3;
+    font-family: monospace;
+}
+
+/* ── LIVE AIS VESSELS ─────────────────────────────────────────────── */
+.ship-pin {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    white-space: nowrap;
+}
+.ship-arrow {
+    display: inline-block;
+    color: #54a0ff;
+    font-size: 13px;
+    line-height: 1;
+    text-shadow: 0 0 4px rgba(0,0,0,0.9);
+    transform-origin: center;
+}
+.ship-name {
+    font-size: 9px;
+    font-weight: bold;
+    color: #dfe6ff;
+    font-family: monospace;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.95);
+}
+
+/* ── LAND WEATHER STATIONS (NWS) ──────────────────────────────────── */
+.wx-box {
+    background: rgba(8, 12, 22, 0.92);
+    border: 1.5px solid #feca57;
+    border-radius: 6px;
+    padding: 3px 8px;
+    backdrop-filter: blur(4px);
+    box-shadow: 0 0 9px rgba(254, 202, 87, 0.5), 0 2px 8px rgba(0,0,0,0.85);
+}
+.wx-name {
+    font-size: 9px;
+    color: #d7e0ea;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+}
+.wx-val {
+    font-size: 12px;
+    font-weight: bold;
+    color: #feca57;
+    font-family: monospace;
+}
+
+
+
+/* Meteorological page: hide the bottom-left data panel — the map is the readout. */
+#main-dash.hud-hidden { display: none !important; }
+
+/* ── HAZARD MONITOR / ROMS LEGEND ─────────────────────────────────── */
+.hazard-legend {
+    padding: 4px 2px;
+}
+
+.legend-title {
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: #a4b0be;
+    margin-bottom: 6px;
+}
+
+.legend-section {
+    margin-bottom: 8px;
+}
+
+.legend-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 11px;
+    color: #dfe6e9;
+    margin: 3px 0;
+}
+
+.leg-dot {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    box-shadow: 0 0 4px currentColor;
+}
+
+
+.traffic-card {
+    display: flex;
+    background: rgba(10, 20, 30, 0.85);
+    border-radius: 8px;
+    border-left: 4px solid #fff;
+    margin-bottom: 6px;
+    padding: 6px;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+    min-height: 52px;
+}
+.traffic-card-left {
+    width: 52px;
+    height: 52px;
+    flex-shrink: 0;
+    margin-right: 10px;
+    border-radius: 4px;
+    overflow: hidden;
+    background: rgba(255,255,255,0.05);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.traffic-image {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+.traffic-image-placeholder {
+    font-size: 32px;
+    opacity: 0.5;
+}
+.traffic-card-right {
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+}
+.tc-title {
+    font-size: 11.5px;
+    font-weight: bold;
+    color: #fff;
+}
+.tc-sub {
+    font-size: 10px;
+    color: #b2bec3;
+    margin-top: 1px;
+}
+.tc-detail {
+    font-size: 9px;
+    color: #81ecec;
+    margin-top: 2px;
+    line-height: 1.2;
+}
+.tc-visits {
+    font-size: 8px;
+    color: #fdcb6e;
+    font-style: italic;
+    margin-top: 2px;
+    text-align: right;
+}
+
+/* ?? BOTTOM TRAFFIC HUD ???????????????????????????????????????????????????????????????????????????? */
+#bottom-traffic-hud {
+    position: absolute;
+    bottom: 1%;
+    left: calc(1% + 260px);
+    z-index: 999;
+    background: rgba(10, 14, 26, 0.95);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 6px;
+    padding: 6px 8px;
+    backdrop-filter: blur(8px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.8);
+    display: none;
+    flex-direction: row;
+    align-items: flex-end;
+    gap: 8px;
+}
+#bottom-traffic-content {
+    display: flex;
+    flex-direction: row;
+    gap: 6px;
+}
+.btm-hud-item {
+    border-left: 3px solid;
+    padding: 2px 6px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    background: rgba(0,0,0,0.4);
+    border-radius: 0 4px 4px 0;
+    min-width: 100px;
+}
+.btm-hud-title {
+    font-size: 10.5px;
+    font-weight: bold;
+    white-space: nowrap;
+}
+.btm-hud-sub {
+    font-size: 9px;
+    color: #dfe6e9;
+    white-space: nowrap;
+    margin-top: 1px;
+}
+.btm-hud-spd {
+    font-size: 9px;
+    color: #a4b0be;
+    white-space: nowrap;
+}
+
+
+
+/* ?? AIRPORT STATUS BOX ???????????????????????????????????????????????????????????????????????????????? */
+#sfo-status-box, #oak-status-box, #sjc-status-box {
+    background: rgba(10, 14, 26, 0.95);
+    border-radius: 8px;
+    padding: 10px 12px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.8);
+    border: 1px solid rgba(255,255,255,0.15);
+    backdrop-filter: blur(12px);
+    width: fit-content;
+    align-self: flex-start;
+}
+
+.traffic-label-small { color: #74b9ff; }
+
+.traffic-label-small { color: #74b9ff; }
+/* ?? AIRPORT STATUS BOX (METEOROLOGICAL) ???????????????????????????????????????????????????????????????????????????????? */
+#sfo-status-box-met, #oak-status-box-met, #sjc-status-box-met {
+    position: absolute;
+    top: 20px;
+    right: 390px;
+    z-index: 999;
+    background: rgba(10, 14, 26, 0.95);
+    border-radius: 8px;
+    padding: 15px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.6);
+    border: 1px solid rgba(255,255,255,0.15);
+    backdrop-filter: blur(8px);
+    width: 140px;
+    height: 140px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    box-sizing: border-box;
+}
+
+
+/* ?? RASPBERRY PI KIOSK DEGRADATION ???????????????????????????????????????????????????????????????????? */
+/* When FPS drops too low, JavaScript will append .low-perf to the <body> to strip heavy GPU features */
+body.low-perf * {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    box-shadow: none !important;
+}
+
+body.low-perf .unified-dashboard,
+body.low-perf .info-box,
+body.low-perf #sfo-status-box, #oak-status-box, #sjc-status-box,
+body.low-perf #sfo-status-box-met, #oak-status-box-met, #sjc-status-box-met,
+body.low-perf #forecast-box {
+    background: rgba(10, 14, 26, 0.98) !important;
+    border: 1px solid rgba(255, 255, 255, 0.25) !important;
+}
+
+/* --- PIC WANTED & CUSTOM IMAGES --- */
+.pic-wanted {
+    display: inline-block;
+    background: #e74c3c;
+    color: white;
+    font-size: 8.5px;
+    font-weight: bold;
+    padding: 2px 4px;
+    border-radius: 3px;
+    margin-left: 6px;
+    box-shadow: 0 0 5px rgba(231, 76, 60, 0.6);
+}
+
+@keyframes pulse-red {
+    0% { opacity: 1; }
+    50% { opacity: 0.6; }
+    100% { opacity: 1; }
+}
+
+#bottom-traffic-hud {
+    height: 75px !important;
+}
+
+.btm-hud-item {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    position: relative;
+    padding-left: 65px !important;
+    min-height: 50px;
+}
+
+.btm-hud-img {
+    position: absolute;
+    left: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 45px;
+    height: 45px;
+    border-radius: 4px;
+    object-fit: cover;
+    border: 1px solid rgba(255,255,255,0.2);
+}
