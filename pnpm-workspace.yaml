@@ -147,5 +147,4 @@ overrides:
   esbuild: "0.27.3"
 
 allowBuilds:
-  better-sqlite3: true
   esbuild: true

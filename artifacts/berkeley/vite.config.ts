@@ -1,30 +1,7 @@
 import { defineConfig } from "vite";
 import path from "path";
 
-const rawPort = process.env.PORT;
-
-if (!rawPort) {
-  throw new Error(
-    "PORT environment variable is required but was not provided.",
-  );
-}
-
-const port = Number(rawPort);
-
-if (Number.isNaN(port) || port <= 0) {
-  throw new Error(`Invalid PORT value: "${rawPort}"`);
-}
-
-const basePath = process.env.BASE_PATH;
-
-if (!basePath) {
-  throw new Error(
-    "BASE_PATH environment variable is required but was not provided.",
-  );
-}
-
 export default defineConfig({
-  base: basePath,
   plugins: [],
   resolve: {
     alias: {
@@ -39,19 +16,19 @@ export default defineConfig({
     emptyOutDir: true,
   },
   server: {
-    port,
-    strictPort: true,
+    port: 3000,
+    strictPort: false,
     host: "0.0.0.0",
     allowedHosts: true,
     fs: {
       strict: true,
     },
     proxy: {
-      '/api': 'http://localhost:5000'
+      '/api': 'http://localhost:5050'
     }
   },
   preview: {
-    port,
+    port: 3000,
     host: "0.0.0.0",
     allowedHosts: true,
   },
