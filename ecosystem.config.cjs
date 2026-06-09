@@ -1,6 +1,6 @@
 module.exports = {
   apps: [{
-    name: 'hawaii-telemetry-api',
+    name: 'berkeley-command-center-api',
     script: 'artifacts/api-server/dist/index.mjs',
     instances: 1,
     autorestart: true,
@@ -8,7 +8,7 @@ module.exports = {
     max_memory_restart: '1G',
     env: {
       NODE_ENV: 'production',
-      PORT: 5000
+      PORT: 5050
     },
     // Loads variables from .env file securely
     env_file: '.env'

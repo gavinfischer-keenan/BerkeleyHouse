@@ -20,7 +20,7 @@ router.get("/turbulence", async (req, res) => {
       fetch("https://aviationweather.gov/api/data/sigmet?format=geojson", { signal: AbortSignal.timeout(8000) }).catch(() => null)
     ]);
 
-    const turbulence = [];
+    const turbulence: any[] = [];
     const processFeatures = async (r: Response | null) => {
       if (!r || !r.ok) return;
       const json = await r.json() as any;
