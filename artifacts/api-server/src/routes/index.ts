@@ -13,6 +13,7 @@ import currentsRouter from "./currents";
 import tideRouter from "./tide";
 import turbulenceRouter from "./turbulence";
 import airportRouter from "./airport";
+import photosRouter from "./photos";
 import { uploadRouter } from "./upload.js";
 
 const router: IRouter = Router();
@@ -31,6 +32,7 @@ router.use(currentsRouter);
 router.use(tideRouter);
 router.use(turbulenceRouter);
 router.use(airportRouter);
+router.use("/photos", photosRouter);
 router.use("/upload", uploadRouter);
 
 export default router;

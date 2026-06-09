@@ -135,10 +135,92 @@ function connect() {
   });
 }
 
-// Kick off the connection at startup if a key is present.
-connect();
+// ── Local AIS source ──────────────────────────────────────────────────────
+// When AIS_SOURCE=local, fetch from a local AIS REST API instead of the
+// AISStream WebSocket. Expected JSON format: array of vessel objects with
+// mmsi, name, lat, lng/lon, sog, cog, heading, type, dest fields.
+const AIS_SOURCE = process.env.AIS_SOURCE ?? "remote";
+const AIS_LOCAL_URL = process.env.AIS_LOCAL_URL ?? "http://localhost:8081/api/vessels";
 
-router.get("/ships", (_req, res) => {
+let localAisCache: { data: unknown; expiresAt: number } | null = null;
+const LOCAL_AIS_CACHE_MS = 60 * 1000; // 1 min
+
+type LocalAisVessel = {
+  mmsi?: number;
+  name?: string;
+  lat?: number;
+  lng?: number;
+  lon?: number;
+  sog?: number | null;
+  cog?: number | null;
+  heading?: number | null;
+  type?: number | null;
+  dest?: string | null;
+  updatedAt?: number;
+};
+
+async function fetchLocalAis(): Promise<Vessel[]> {
+  const r = await fetch(AIS_LOCAL_URL, {
+    headers: { "User-Agent": "BerkeleyCommandCenter/1.0" },
+    signal: AbortSignal.timeout(8000),
+  });
+  if (!r.ok) throw new Error(`local AIS ${r.status}`);
+  const json = (await r.json()) as LocalAisVessel[] | { vessels?: LocalAisVessel[] };
+  const list = Array.isArray(json) ? json : (json.vessels ?? []);
+  return list
+    .filter((v) => v.mmsi != null && (v.lat != null) && (v.lng != null || v.lon != null))
+    .map((v) => ({
+      mmsi: v.mmsi!,
+      name: (v.name ?? "").trim() || `MMSI ${v.mmsi}`,
+      lat: v.lat!,
+      lng: v.lng ?? v.lon!,
+      sog: v.sog ?? null,
+      cog: v.cog ?? null,
+      heading: v.heading ?? null,
+      type: v.type ?? null,
+      dest: v.dest ?? null,
+      updatedAt: v.updatedAt ?? Date.now(),
+    }));
+}
+
+// Kick off the WebSocket connection at startup if using remote source.
+if (AIS_SOURCE !== "local") {
+  connect();
+}
+
+router.get("/ships", async (_req, res) => {
+  // ── Local AIS source path ──────────────────────────────────────────────
+  if (AIS_SOURCE === "local") {
+    try {
+      if (localAisCache && Date.now() < localAisCache.expiresAt) {
+        res.json(localAisCache.data);
+        return;
+      }
+
+      const localVessels = await fetchLocalAis();
+      localVessels.forEach((v) => logVesselObservation(v.mmsi, v.name, v.type));
+
+      const ships = localVessels.map((v) => {
+        const meta = getVesselMeta(v.mmsi);
+        return {
+          ...v,
+          visit_count: meta?.visit_count ?? 1,
+          first_seen: meta?.first_seen ?? Date.now(),
+          image_url: meta?.image_url ?? null,
+        };
+      });
+
+      const data = { ships, connected: true, fetchedAt: Date.now() };
+      localAisCache = { data, expiresAt: Date.now() + LOCAL_AIS_CACHE_MS };
+      res.json(data);
+    } catch (err) {
+      logger.error({ err }, "Failed to fetch vessels from local AIS");
+      res.json({ ships: [], connected: false, reason: "local_fetch_error", fetchedAt: Date.now() });
+    }
+    return;
+  }
+
+  // ── Remote AISStream path (existing logic) ─────────────────────────────
   const key = process.env.AISSTREAM_API_KEY;
   if (!key) {
     res.json({ ships: [], connected: false, reason: "no_key", fetchedAt: Date.now() });
@@ -169,4 +251,5 @@ router.get("/ships", (_req, res) => {
 });
 
 export default router;
+
 

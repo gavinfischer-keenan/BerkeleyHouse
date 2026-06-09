@@ -1,5 +1,6 @@
 import { Router } from "express";
-import { logAircraftObservation, getAircraftMeta } from "../db";
+import { logAircraftObservation, getAircraftMeta, setAircraftImage } from "../db";
+import { logger } from "../lib/logger";
 
 const router = Router();
 
@@ -54,6 +55,57 @@ type AdsbAircraft = {
   track?: number;
 };
 
+// ── hexdb.io photo auto-fetch ─────────────────────────────────────────────
+// After enrichment, attempt to fetch aircraft photos from hexdb.io for aircraft
+// that don't have an image_url. Rate-limited to 3 per refresh cycle. Retries
+// after 7 days if photo_fetched_at is stale.
+const MAX_PHOTO_FETCHES_PER_REFRESH = 3;
+const PHOTO_RETRY_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+
+async function fetchHexdbPhoto(icao24: string): Promise<string | null> {
+  try {
+    const hexUrl = `https://hexdb.io/hex-image?hex=${encodeURIComponent(icao24)}`;
+    const r = await fetch(hexUrl, {
+      headers: { "User-Agent": "BerkeleyCommandCenter/1.0" },
+      redirect: "follow",
+      signal: AbortSignal.timeout(3000),
+    });
+    if (!r.ok) return null;
+    return r.url;
+  } catch {
+    return null;
+  }
+}
+
+// ── Local ADS-B source (dump1090 / readsb) ────────────────────────────────
+// dump1090/readsb JSON format: { aircraft: [{ hex, flight, lat, lon, alt_baro,
+// alt_geom, gs, track, r, t, ... }], now: epoch }
+// Conveniently uses the same field names as adsb.fi so we can reuse AdsbAircraft.
+const ADSB_SOURCE = process.env.ADSB_SOURCE ?? "remote";
+const ADSB_LOCAL_URL = process.env.ADSB_LOCAL_URL ?? "http://localhost:8080/data/aircraft.json";
+
+async function fetchAircraftRaw(): Promise<{ aircraft: AdsbAircraft[]; now: number | null }> {
+  if (ADSB_SOURCE === "local") {
+    const r = await fetch(ADSB_LOCAL_URL, {
+      headers: { "User-Agent": "BerkeleyCommandCenter/1.0" },
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!r.ok) throw new Error(`local ADS-B ${r.status}`);
+    const json = (await r.json()) as { aircraft?: AdsbAircraft[]; now?: number };
+    return { aircraft: json.aircraft ?? [], now: json.now ?? null };
+  }
+
+  // Default: adsb.fi remote
+  const url = `https://opendata.adsb.fi/api/v2/lat/${CENTER.lat}/lon/${CENTER.lon}/dist/${RADIUS_NM}`;
+  const r = await fetch(url, {
+    headers: { "User-Agent": "BerkeleyCommandCenter/1.0" },
+    signal: AbortSignal.timeout(8000),
+  });
+  if (!r.ok) throw new Error(`adsb.fi ${r.status}`);
+  const json = (await r.json()) as { aircraft?: AdsbAircraft[]; now?: number };
+  return { aircraft: json.aircraft ?? [], now: json.now ?? null };
+}
+
 router.get("/aircraft", async (req, res) => {
   try {
     if (cache && Date.now() < cache.expiresAt) {
@@ -61,14 +113,9 @@ router.get("/aircraft", async (req, res) => {
       return;
     }
 
-    const url = `https://opendata.adsb.fi/api/v2/lat/${CENTER.lat}/lon/${CENTER.lon}/dist/${RADIUS_NM}`;
-    const r = await fetch(url, { headers: { "User-Agent": "BerkeleyCommandCenter/1.0" }, signal: AbortSignal.timeout(8000),
-    });
-    if (!r.ok) throw new Error(`adsb.fi ${r.status}`);
+    const raw = await fetchAircraftRaw();
 
-    const json = (await r.json()) as { aircraft?: AdsbAircraft[]; now?: number };
-
-    const aircraft = (json.aircraft ?? [])
+    const aircraft = raw.aircraft
       .filter((a) => a.lat != null && a.lon != null)
       .map((a) => {
         const onGround = a.alt_baro === "ground";
@@ -115,16 +162,56 @@ router.get("/aircraft", async (req, res) => {
       };
     });
 
-    const data = { aircraft: enriched, fetchedAt: Date.now(), dataTime: json.now ?? null };
+    // ── hexdb.io photo auto-fetch pass ──────────────────────────────────────
+    // Pick up to MAX_PHOTO_FETCHES_PER_REFRESH aircraft without photos (or with
+    // stale photo_fetched_at) and try to resolve an image from hexdb.io.
+    try {
+      const now = Date.now();
+      const candidates = enriched.filter((a) => {
+        if (a.image_url) return false;
+        const meta = getAircraftMeta(a.icao24);
+        if (!meta) return false;
+        if (meta.photo_fetched_at == null) return true;
+        return now - meta.photo_fetched_at > PHOTO_RETRY_MS;
+      }).slice(0, MAX_PHOTO_FETCHES_PER_REFRESH);
+
+      if (candidates.length) {
+        const results = await Promise.allSettled(
+          candidates.map((a) => fetchHexdbPhoto(a.icao24)),
+        );
+        candidates.forEach((a, i) => {
+          const result = results[i];
+          const finalUrl = result.status === "fulfilled" ? result.value : null;
+          const meta = getAircraftMeta(a.icao24);
+          if (finalUrl) {
+            setAircraftImage(a.icao24, finalUrl);
+            if (meta) {
+              meta.photo_source = "hexdb";
+              meta.photo_fetched_at = Date.now();
+            }
+            a.image_url = finalUrl;
+            logger.info({ icao24: a.icao24 }, "Auto-fetched photo from hexdb.io");
+          } else {
+            // Mark as attempted to avoid retrying constantly
+            if (meta) meta.photo_fetched_at = Date.now();
+          }
+        });
+      }
+    } catch (photoErr) {
+      logger.warn({ err: photoErr }, "hexdb.io photo auto-fetch pass failed");
+    }
+
+    const data = { aircraft: enriched, fetchedAt: Date.now(), dataTime: raw.now ?? null };
     cache = { data, expiresAt: Date.now() + CACHE_MS };
     res.json(data);
   } catch (err) {
-    req.log.error({ err }, "Failed to fetch aircraft from adsb.fi");
+    req.log.error({ err }, "Failed to fetch aircraft");
     res.json({ aircraft: [], fetchedAt: Date.now(), source: "fallback" });
   }
 });
 
 export default router;
+
 
 
 

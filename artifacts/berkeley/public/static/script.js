@@ -1,9 +1,12 @@
 // =====================================================================
 // BERKELEY COMMAND CENTER — script.js
+// Target display: Insignia NS-50F501NA26 (3840×2160 4K, 50", 60Hz)
+// Logical viewport: 1920×1080 — CSS scale(2) fills 4K natively.
 // =====================================================================
 
 // --- VIEWPORT SCALING ---
-// Absolutely locks the resolution to 1920x1080 regardless of window size.
+// Locks the logical resolution to 1920×1080 and scales to fill the display.
+// On a 4K TV (3840×2160), scale factor is exactly 2.0 for pixel-perfect rendering.
 function applyScale() {
     const ww = window.innerWidth, wh = window.innerHeight;
     const scale = Math.min(ww / 1920, wh / 1080);
@@ -582,7 +585,7 @@ function pointInPolygon(point, vs) {
 var liveData = { weather: null, buoys: null, quakes: null, alerts: null, turbulence: null, airquality: null, aircraft: [], ships: [], shipsConnected: false, stations: [], currents: null, tide: null };
 
 let trafficHistory = {};
-const BREADCRUMB_LIMIT = 7; // ~1 minute at 10-second intervals
+const TRAIL_DURATION_MS = 30000; // 30-second trail window
 
 function recordTrafficBreadcrumb(id, lat, lng) {
     if (!id || lat == null || lng == null) return;
@@ -593,7 +596,6 @@ function recordTrafficBreadcrumb(id, lat, lng) {
     const hist = trafficHistory[id];
     if (hist.length > 0) {
         const last = hist[hist.length - 1];
-        // Ensure backward compatibility with existing non-timestamped breadcrumbs
         const lastTime = last[2] || now - 10000; 
         const dtSec = (now - lastTime) / 1000;
         
@@ -602,20 +604,24 @@ function recordTrafficBreadcrumb(id, lat, lng) {
             const distNm = distM / 1852;
             const dtHr = dtSec / 3600;
             
-            // Speed cap set to 600 knots to accommodate commercial jets (450+ knots).
+            // Speed cap: 600 knots for commercial jets
             if ((distNm / dtHr) > 600) {
-                trafficHistory[id] = []; // Clear history to snap the line instead of stretching it
+                trafficHistory[id] = [];
             }
         }
     }
     
     trafficHistory[id].push([lat, lng, now]);
-    if (trafficHistory[id].length > BREADCRUMB_LIMIT) {
+    
+    // Time-based pruning: keep only last 30 seconds of positions
+    const cutoff = now - TRAIL_DURATION_MS;
+    while (trafficHistory[id].length > 0 && (trafficHistory[id][0][2] || 0) < cutoff) {
         trafficHistory[id].shift();
     }
 }
 
 let activeBreadcrumbs = {};
+let activeTrailDots = {};
 
 function drawBreadcrumbs(id, layer, color, cacheKey = id) {
     const history = trafficHistory[id];
@@ -623,6 +629,10 @@ function drawBreadcrumbs(id, layer, color, cacheKey = id) {
         if (activeBreadcrumbs[cacheKey]) {
             activeBreadcrumbs[cacheKey].forEach(p => layer.removeLayer(p));
             delete activeBreadcrumbs[cacheKey];
+        }
+        if (activeTrailDots[cacheKey]) {
+            layer.removeLayer(activeTrailDots[cacheKey]);
+            delete activeTrailDots[cacheKey];
         }
         return;
     }
@@ -635,7 +645,9 @@ function drawBreadcrumbs(id, layer, color, cacheKey = id) {
     while (lines.length < numSegments) {
         const p = L.polyline([], {
             color: color,
-            weight: 4, // Thicker line for visibility
+            weight: 5,
+            lineCap: 'round',
+            lineJoin: 'round',
             pane: 'trafficPane'
         });
         lines.push(p);
@@ -645,15 +657,28 @@ function drawBreadcrumbs(id, layer, color, cacheKey = id) {
         layer.removeLayer(p);
     }
     
-    // Draw fading line segments leading up to the vessel
+    const now = Date.now();
     for (let i = 0; i < numSegments; i++) {
-        // Opacity increases as it gets closer to the current position
-        const opacity = ((i + 1) / history.length) * 0.9;
+        // Time-based opacity: older segments fade out
+        const segTime = history[i+1][2] || now;
+        const age = (now - segTime) / TRAIL_DURATION_MS;
+        const opacity = Math.max(0.15, (1 - age) * 0.9);
         lines[i].setLatLngs([history[i], history[i+1]]);
-        lines[i].setStyle({ opacity: opacity, color: color });
+        lines[i].setStyle({ opacity: opacity, color: color, weight: 3 + (1 - age) * 3 });
         if (!layer.hasLayer(lines[i])) {
             lines[i].addTo(layer);
         }
+    }
+    
+    // Glowing dot at current position
+    const latest = history[history.length - 1];
+    if (!activeTrailDots[cacheKey]) {
+        activeTrailDots[cacheKey] = L.circleMarker([latest[0], latest[1]], {
+            radius: 4, color: color, fillColor: '#fff', fillOpacity: 1, weight: 2, opacity: 0.9,
+            pane: 'trafficPane'
+        }).addTo(layer);
+    } else {
+        activeTrailDots[cacheKey].setLatLng([latest[0], latest[1]]);
     }
 }
 
@@ -736,13 +761,14 @@ async function fetchShips() {
 
             const rot = v.cog != null ? v.cog : (v.heading != null ? v.heading : 0);
             const offshore = !isVesselInPort(v);
-            const arrowStyle = `transform:rotate(${rot}deg);` + (offshore ? ` font-size:26px; color:#ff9f43; text-shadow: 0 0 12px #ff9f43, 0 0 4px #000; margin-right: 2px;` : ` font-size:18px; color:#ff9f43; text-shadow: 0 0 4px #000; margin-right: 2px;`);
+            const shipScale = offshore ? 'width:18px;height:22px;' : 'width:12px;height:16px;';
+            const shipGlow = offshore ? 'filter: drop-shadow(0 0 6px #ff9f43);' : '';
             const html = `<div class="ship-pin" title="${v.name}">
-                <span class="ship-arrow" style="${arrowStyle}">➤ </span>
+                <span class="ship-icon" style="display:inline-block; transform:rotate(${rot}deg); transition:transform 0.5s ease; ${shipScale} ${shipGlow}">${SHIP_SVG}</span>
                 <span class="ship-name">${v.name}</span>
             </div>`;
             
-            const iconObj = L.divIcon({ className: '', html, iconSize: [120, 18], iconAnchor: [9, 9] });
+            const iconObj = L.divIcon({ className: '', html, iconSize: [140, 24], iconAnchor: [12, 12] });
             if (!activeShips[id]) {
                 activeShips[id] = L.marker([v.lat, v.lng], { pane: 'trafficPane', icon: iconObj }).addTo(shipLayer);
             } else {
@@ -760,6 +786,11 @@ async function fetchShips() {
                     activeBreadcrumbs[id].forEach(p => shipLayer.removeLayer(p));
                     delete activeBreadcrumbs[id];
                 }
+                if (activeTrailDots[id]) {
+                    shipLayer.removeLayer(activeTrailDots[id]);
+                    delete activeTrailDots[id];
+                }
+                delete trafficHistory[id];
             }
         }
     } catch(e) { console.warn('Ship fetch:', e); }
@@ -1057,8 +1088,8 @@ async function fetch7DayForecast() {
     } catch(e) { console.warn('Forecast fetch:', e); }
 }
 
-// ─── Real aircraft from OpenSky Network (free, no key, 10-min cache on server)
-// Helicopter icon for low-altitude (<3000ft) or slow (<120kt) targets.
+// ─── Real aircraft from ADS-B (adsb.fi, 60s cache on server)
+// Classification: helicopter / small GA / airliner based on acType + altitude + speed.
 function getAircraftClass(acType, altFt, speedKt) {
     if (!acType) {
         if ((altFt != null && altFt < 3000) || (speedKt != null && speedKt < 120 && altFt < 5000)) return 'helo';
@@ -1070,10 +1101,27 @@ function getAircraftClass(acType, altFt, speedKt) {
     return 'air';
 }
 
-function getAircraftIcon(cls) {
-    if (cls === 'helo') return '🚁';
-    if (cls === 'small') return '🛩️';
-    return '✈️';
+// SVG silhouette icons — white fill, rotatable by heading
+const AIRCRAFT_SVG = {
+    // Airliner — top-down silhouette, pointed up (0° = north)
+    air: `<svg viewBox="0 0 24 24" width="18" height="18" xmlns="http://www.w3.org/2000/svg"><path d="M12 2 L14 8 L22 12 L14 13 L14 20 L17 22 L7 22 L10 20 L10 13 L2 12 L10 8 Z" fill="#1dd1a1" stroke="#000" stroke-width="0.8"/></svg>`,
+    // Helicopter — top-down with rotor disc
+    helo: `<svg viewBox="0 0 24 24" width="16" height="16" xmlns="http://www.w3.org/2000/svg"><ellipse cx="12" cy="8" rx="10" ry="1.5" fill="none" stroke="#ffd32a" stroke-width="1" opacity="0.6"/><path d="M12 4 L13.5 10 L15 14 L14 18 L16 22 L8 22 L10 18 L9 14 L10.5 10 Z" fill="#ffd32a" stroke="#000" stroke-width="0.8"/><line x1="10" y1="18" x2="14" y2="18" stroke="#ffd32a" stroke-width="1.5"/></svg>`,
+    // Small plane — simpler shape
+    small: `<svg viewBox="0 0 24 24" width="14" height="14" xmlns="http://www.w3.org/2000/svg"><path d="M12 3 L13.5 9 L20 12 L13.5 13 L13 19 L15 21 L9 21 L11 19 L10.5 13 L4 12 L10.5 9 Z" fill="#74b9ff" stroke="#000" stroke-width="0.8"/></svg>`
+};
+
+// Ship SVG silhouette — pointed bow, top-down view
+const SHIP_SVG = `<svg viewBox="0 0 20 24" width="14" height="18" xmlns="http://www.w3.org/2000/svg"><path d="M10 2 L14 8 L14 18 L12 22 L8 22 L6 18 L6 8 Z" fill="#ff9f43" stroke="#000" stroke-width="0.8"/></svg>`;
+
+function getAircraftSvg(cls) {
+    return AIRCRAFT_SVG[cls] || AIRCRAFT_SVG.air;
+}
+
+function getTrailColor(cls) {
+    if (cls === 'helo') return '#e84393';
+    if (cls === 'small') return '#74b9ff';
+    return '#00d2d3';
 }
 
 const activeAircraft = {};
@@ -1097,13 +1145,17 @@ async function fetchAircraft() {
             }
 
             const acCls = getAircraftClass(a.acType, a.altFt, a.speedKt);
-            const icon  = getAircraftIcon(acCls);
+            const svgIcon = getAircraftSvg(acCls);
+            const heading = a.heading != null ? a.heading : 0;
             const altStr  = a.altFt != null ? (a.altFt > 18000 ? 'FL' + Math.round(a.altFt/100) : Math.round(a.altFt) + 'ft') : '';
             const typeStr = a.acType || '';
             const call = id;
-            const label = `${icon} ${call} ${typeStr} ${altStr}`.trim();
+            const trailColor = getTrailColor(acCls);
+            
+            // Build label with rotatable SVG icon + text
+            const label = `<span class="aircraft-icon" style="transform:rotate(${heading}deg)">${svgIcon}</span> <span class="ac-label-text">${call} ${typeStr} ${altStr}</span>`;
             const cls   = acCls === 'helo' ? 'traffic-label traffic-label-helo' : (acCls === 'small' ? 'traffic-label traffic-label-small' : 'traffic-label traffic-label-air');
-            const iconObj = L.divIcon({ className: cls, html: label, iconSize: [200, 20], iconAnchor: [8, 10] });
+            const iconObj = L.divIcon({ className: cls, html: label, iconSize: [220, 22], iconAnchor: [12, 11] });
 
             if (!activeAircraft[id]) {
                 activeAircraft[id] = { marker: null, deepMarker: null };
@@ -1116,7 +1168,7 @@ async function fetchAircraft() {
                 cache.marker.setLatLng([a.lat, a.lng]);
                 cache.marker.setIcon(iconObj);
             }
-            drawBreadcrumbs(id, airLayer, '#00d2d3');
+            drawBreadcrumbs(id, airLayer, trailColor);
 
             // Flag as Deep Ocean if > 80.4 km (50 miles) from land
             const kmOff = distToShoreKm(a.lat, a.lng);
@@ -1131,7 +1183,7 @@ async function fetchAircraft() {
                     cache.deepMarker.setLatLng([a.lat, a.lng]);
                     cache.deepMarker.setIcon(deepIconObj);
                 }
-                drawBreadcrumbs(id, deepOceanAirLayer, '#00d2d3', id + "_deep");
+                drawBreadcrumbs(id, deepOceanAirLayer, trailColor, id + "_deep");
             } else {
                 a.isDeepOcean = false;
                 if (cache.deepMarker) {
@@ -1156,10 +1208,19 @@ async function fetchAircraft() {
                     activeBreadcrumbs[id].forEach(p => airLayer.removeLayer(p));
                     delete activeBreadcrumbs[id];
                 }
+                if (activeTrailDots[id]) {
+                    airLayer.removeLayer(activeTrailDots[id]);
+                    delete activeTrailDots[id];
+                }
                 if (activeBreadcrumbs[id + "_deep"]) {
                     activeBreadcrumbs[id + "_deep"].forEach(p => deepOceanAirLayer.removeLayer(p));
                     delete activeBreadcrumbs[id + "_deep"];
                 }
+                if (activeTrailDots[id + "_deep"]) {
+                    deepOceanAirLayer.removeLayer(activeTrailDots[id + "_deep"]);
+                    delete activeTrailDots[id + "_deep"];
+                }
+                delete trafficHistory[id];
             }
         }
 
@@ -1792,7 +1853,7 @@ const uiStates = [
             const fb = document.getElementById('forecast-box');
             if (fb) fb.style.display = 'block';
             updateLegend('wind');
-            updateAirportBoxMet();
+            // Airport status deferred to hazard tab (v0.4)
         },
         onExit()  { 
             document.getElementById('main-dash').classList.remove('hud-hidden'); 
@@ -1800,7 +1861,7 @@ const uiStates = [
             if (fb) fb.style.display = 'none';
             updateLegend('none');
             stopBottomTrafficHUD();
-            hideAirportBoxMet();
+            // Airport status deferred to hazard tab (v0.4)
         }
     },
     // 🟢 1: SURF & OCEAN – combined surf cards + buoy HUDs 🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢
@@ -1902,137 +1963,7 @@ const uiStates = [
         },
         onEnter() { setSurfMode('large'); updateLegend('wave'); startBottomTrafficHUD('ship'); },   // big boxed cards + declutter
         onExit()  { setSurfMode('small'); updateLegend('none'); stopBottomTrafficHUD(); }    // compact pins everywhere else
-    },
-    // 🟢 2: TRAFFIC – SF HARBOR & WATERFRONT 🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢
-    {
-        id: 'state-traffic',
-        title: "TRAFFIC — COMBINED", sub: "SF HARBOR & WATERFRONT", pageSize: 6, holdExtraMs: 3300,
-        view: 'harbor',
-        layersOn:  [airLayer, shipLayer, superDenseDepthLayer, airportLayer, radarLayerGroup, harborTideLayer],
-        layersOff: [aqiLayer, buoyLayer, quakeLayer, lightningLayer, denseDepthLayer],
-        getItems: getHarborTrafficItems, renderItem: renderHarborTrafficCard
-    },
-    // ── 5: HAZARD MONITOR — SEISMIC + LIGHTNING + TURBULENCE ──────────
-    {
-        id: 'state-hazard',
-        title: "HAZARD MONITOR", sub: "SEISMIC ∙ LIGHTNING ∙ ALERTS ∙ TURBULENCE", perPageMs: 3500, pageSize: 4, holdExtraMs: 4000,
-        view: 'bayarea-wide',
-        layersOn:  [quakeLayer, lightningLayer, alertLayer, turbulenceLayer, hazardTextLayer, romsTempLayer],
-        layersOff: [radarLayerGroup, aqiLayer, airLayer, shipLayer, buoyLayer, denseDepthLayer, sparseDepthLayer, deepOceanAirLayer],
-        getItems: getDeepOceanFlightItems, renderItem: renderDeepOceanFlightItem,
-        onEnter() { fetchAirport(); updateLegend('roms'); updateAirportBox(); },
-        onExit()  { updateLegend('none'); hideAirportBox(); },
-        renderStatic() {
-            return `
-            <div class="hazard-legend" style="margin-bottom: 12px;">
-                <div class="legend-title">HAZARD STATUS</div>
-                <div class="legend-section">
-                    <div class="legend-row"><span class="leg-dot" style="background:#ee5253;"></span><span style="color:#ffffff;">M3.0+ Quake / Hurricane</span></div>
-                    <div class="legend-row"><span class="leg-dot" style="background:#ff9f43;"></span><span style="color:#ffffff;">M2.0+ Quake / Sm Craft Adv</span></div>
-                    <div class="legend-row"><span class="leg-dot" style="background:#1dd1a1;"></span><span style="color:#ffffff;">High Surf Adv / Warning</span></div>
-                    <div class="legend-row"><span class="leg-dot" style="background:#e84393;"></span><span style="color:#ffffff;">Gale Warn / Hi-Lvl Turb</span></div>
-                    <div class="legend-row"><span class="leg-dot" style="background:#a29bfe;"></span><span style="color:#ffffff;">Lightning / Minor Alert</span></div>
-                    <div class="legend-row"><span class="leg-dot" style="background:#fdcb6e;"></span><span style="color:#ffffff;">Low Turb / Micro-seismic</span></div>
-                </div>
-            </div>
-            `;
-        }
-    },
-    // ── 6: SATELLITE — GOES-WEST ───────────────────────────────────────
-    {
-        title: "SATELLITE — GOES-WEST", sub: "LAST 12 HOURS · GEOCOLOR", duration: 10000,
-        view: 'bayarea-wide',
-        layersOn:  [],
-        layersOff: [radarLayerGroup, aqiLayer, airLayer, shipLayer, buoyLayer, quakeLayer, lightningLayer, denseDepthLayer, alertLayer, turbulenceLayer],
-        onEnter() {
-            let el = document.getElementById('goes-satellite');
-            if (!el) {
-                el = document.createElement('div');
-                el.id = 'goes-satellite';
-                el.style.position = 'absolute';
-                el.style.inset = '0';
-                el.style.zIndex = '9999';
-                el.style.pointerEvents = 'none';
-                el.style.background = '#000';
-                el.style.opacity = '0';
-                el.style.transition = 'opacity 0.8s ease-in-out';
-                // Append an img
-                el.innerHTML = '<img id="goes-img" style="width:100%; height:100%; object-fit:contain;">';
-                document.getElementById('viewport-scaler').appendChild(el);
-            }
-            // Update the src ONLY if the 5-minute window has passed, to avoid reloading the GIF
-            const cacheBuster = Math.floor(Date.now() / 300000);
-            const targetUrl = "https://cdn.star.nesdis.noaa.gov/GOES18/ABI/SECTOR/wus/GEOCOLOR/GOES18-WUS-GEOCOLOR-600x600.gif?t=" + cacheBuster;
-            const img = document.getElementById('goes-img');
-            if (img.src !== targetUrl) {
-                img.src = targetUrl;
-            }
-            
-            // Force reflow and fade in
-            el.style.display = 'block';
-            void el.offsetWidth;
-            el.style.opacity = '1';
-            
-            document.getElementById('main-dash').classList.add('hud-hidden');
-        },
-        onExit() {
-            const el = document.getElementById('goes-satellite');
-            if (el) {
-                el.style.opacity = '0';
-                // We keep display: block so the browser doesn't drop the GIF decoded frames from memory,
-                // but pointer-events: none ensures it doesn't block anything.
-            }
-            document.getElementById('main-dash').classList.remove('hud-hidden');
-        },
-        renderStatic() { return ''; }
-    },
-    // ── 11: RADAR — NWS WEST COAST LOOP ────────────────────────────────
-    {
-        title: "RADAR — NWS MRMS", sub: "WEST COAST REGIONAL LOOP", duration: 8000,
-        view: 'bayarea-wide',
-        layersOn:  [],
-        layersOff: [radarLayerGroup, aqiLayer, airLayer, shipLayer, buoyLayer, quakeLayer, lightningLayer, denseDepthLayer, alertLayer, turbulenceLayer],
-        onEnter() {
-            let el = document.getElementById('nws-radar-loop');
-            if (!el) {
-                el = document.createElement('div');
-                el.id = 'nws-radar-loop';
-                el.style.position = 'absolute';
-                el.style.inset = '0';
-                el.style.zIndex = '9999';
-                el.style.pointerEvents = 'none';
-                el.style.background = '#000';
-                el.style.opacity = '0';
-                el.style.transition = 'opacity 0.8s ease-in-out';
-                // Append an img
-                el.innerHTML = '<img id="nws-radar-img" style="width:100%; height:100%; object-fit:contain;">';
-                document.getElementById('viewport-scaler').appendChild(el);
-            }
-            // Update the src ONLY if the 5-minute window has passed, to avoid reloading the GIF
-            const cacheBuster = Math.floor(Date.now() / 300000);
-            const targetUrl = "https://radar.weather.gov/ridge/standard/CONUS-WEST_loop.gif?t=" + cacheBuster;
-            const img = document.getElementById('nws-radar-img');
-            if (img.src !== targetUrl) {
-                img.src = targetUrl;
-            }
-            
-            // Force reflow and fade in
-            el.style.display = 'block';
-            void el.offsetWidth;
-            el.style.opacity = '1';
-            
-            document.getElementById('main-dash').classList.add('hud-hidden');
-        },
-        onExit() {
-            const el = document.getElementById('nws-radar-loop');
-            if (el) {
-                el.style.opacity = '0';
-            }
-            document.getElementById('main-dash').classList.remove('hud-hidden');
-        },
-        renderStatic() { return ''; }
-    },
-
+    }
 ];
 
 // =====================================================================

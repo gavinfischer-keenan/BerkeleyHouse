@@ -2,8 +2,8 @@ import fs from 'fs';
 import path from 'path';
 import { logger } from './lib/logger.js';
 
-export interface DBVessel { mmsi: number; name: string; type: number | null; first_seen: number; last_seen: number; visit_count: number; image_url: string | null; }
-export interface DBAircraft { icao24: string; callsign: string; first_seen: number; last_seen: number; visit_count: number; image_url: string | null; }
+export interface DBVessel { mmsi: number; name: string; type: number | null; first_seen: number; last_seen: number; visit_count: number; image_url: string | null; photo_source: 'manual' | 'hexdb' | 'marinetraffic' | null; photo_fetched_at: number | null; }
+export interface DBAircraft { icao24: string; callsign: string; first_seen: number; last_seen: number; visit_count: number; image_url: string | null; photo_source: 'manual' | 'hexdb' | 'marinetraffic' | null; photo_fetched_at: number | null; }
 
 interface DatabaseStructure {
   vessels: Record<number, DBVessel>;
@@ -69,7 +69,7 @@ export function logVesselObservation(mmsi: number, name: string, type: number | 
     }
     existing.last_seen = now;
   } else {
-    db.vessels[mmsi] = { mmsi, name, type, first_seen: now, last_seen: now, visit_count: 1, image_url: null };
+    db.vessels[mmsi] = { mmsi, name, type, first_seen: now, last_seen: now, visit_count: 1, image_url: null, photo_source: null, photo_fetched_at: null };
   }
   saveDatabase();
 }
@@ -80,7 +80,7 @@ export function getVesselMeta(mmsi: number): DBVessel | undefined {
 
 export function setVesselImage(mmsi: number, url: string) {
   if (!db.vessels[mmsi]) {
-    db.vessels[mmsi] = { mmsi, name: 'Unknown', type: null, first_seen: Date.now(), last_seen: Date.now(), visit_count: 1, image_url: url };
+    db.vessels[mmsi] = { mmsi, name: 'Unknown', type: null, first_seen: Date.now(), last_seen: Date.now(), visit_count: 1, image_url: url, photo_source: null, photo_fetched_at: null };
   } else {
     db.vessels[mmsi].image_url = url;
   }
@@ -96,7 +96,7 @@ export function logAircraftObservation(icao24: string, callsign: string) {
     }
     existing.last_seen = now;
   } else {
-    db.aircraft[icao24] = { icao24, callsign, first_seen: now, last_seen: now, visit_count: 1, image_url: null };
+    db.aircraft[icao24] = { icao24, callsign, first_seen: now, last_seen: now, visit_count: 1, image_url: null, photo_source: null, photo_fetched_at: null };
   }
   saveDatabase();
 }
@@ -107,7 +107,7 @@ export function getAircraftMeta(icao24: string): DBAircraft | undefined {
 
 export function setAircraftImage(icao24: string, url: string) {
   if (!db.aircraft[icao24]) {
-    db.aircraft[icao24] = { icao24, callsign: 'Unknown', first_seen: Date.now(), last_seen: Date.now(), visit_count: 1, image_url: url };
+    db.aircraft[icao24] = { icao24, callsign: 'Unknown', first_seen: Date.now(), last_seen: Date.now(), visit_count: 1, image_url: url, photo_source: null, photo_fetched_at: null };
   } else {
     db.aircraft[icao24].image_url = url;
   }

@@ -44,6 +44,10 @@ if (process.env.NODE_ENV === "production") {
   app.get("*", (_req, res) => {
     res.sendFile(path.join(publicDir, "index.html"));
   });
+} else {
+  app.get("/", (_req, res) => {
+    res.send("API Server is running. Please access the frontend at http://localhost:3001");
+  });
 }
 
 export default app;
