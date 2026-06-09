@@ -1,5 +1,7 @@
 import { Router, type Request, type Response } from "express";
 import { logger } from "../lib/logger";
+import { broadcast } from "../services/ws-hub";
+import { recordServiceUpdate } from "../services/registry";
 
 const router = Router();
 
@@ -55,10 +57,13 @@ router.get("/airport", async (req: Request, res: Response) => {
             throw new Error(`FAA API returned ${response.status}`);
         }
         
-        const data = await response.json() as any[];
-        const airports = AIRPORTS.map((code) => extractAirportStatus(code, data));
+        const rawData = await response.json() as any[];
+        const airports = AIRPORTS.map((code) => extractAirportStatus(code, rawData));
         
-        res.json({ airports, fetchedAt: Date.now() });
+        const data = { airports, fetchedAt: Date.now() };
+        broadcast('airport:update', data);
+        recordServiceUpdate('airport');
+        res.json(data);
     } catch (error: any) {
         logger.error({ err: error }, "Error fetching airport status");
         res.json({

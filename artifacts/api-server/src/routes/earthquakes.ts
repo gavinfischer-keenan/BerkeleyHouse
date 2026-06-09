@@ -1,4 +1,6 @@
 import { Router } from "express";
+import { broadcast } from "../services/ws-hub";
+import { recordServiceUpdate } from "../services/registry";
 
 const router = Router();
 
@@ -46,7 +48,10 @@ router.get("/earthquakes", async (req, res) => {
       depth: f.geometry.coordinates[2],
     }));
 
-    res.json({ quakes, fetchedAt: Date.now() });
+    const data = { quakes, fetchedAt: Date.now() };
+    broadcast('quakes:update', data);
+    recordServiceUpdate('earthquakes');
+    res.json(data);
   } catch (err) {
     req.log.error({ err }, "Failed to fetch earthquakes");
     res.status(502).json({ error: "Failed to fetch earthquake data" });

@@ -1,4 +1,6 @@
 import { Router } from "express";
+import { broadcast } from "../services/ws-hub";
+import { recordServiceUpdate } from "../services/registry";
 
 const router = Router();
 
@@ -73,6 +75,8 @@ router.get("/currents", async (req, res) => {
 
     const data = { points, avgKt, source: "Open-Meteo Marine model", fetchedAt: Date.now() };
     cache = { data, expiresAt: Date.now() + CACHE_MS };
+    broadcast('currents:update', data);
+    recordServiceUpdate('currents');
     res.json(data);
   } catch (err) {
     req.log.error({ err }, "Failed to fetch ocean currents");

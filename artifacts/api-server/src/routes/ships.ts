@@ -1,6 +1,8 @@
 import { Router } from "express";
 import { logger } from "../lib/logger";
 import { logVesselObservation, getVesselMeta } from "../db";
+import { broadcast } from "../services/ws-hub";
+import { recordServiceUpdate } from "../services/registry";
 
 const router = Router();
 
@@ -212,6 +214,8 @@ router.get("/ships", async (_req, res) => {
 
       const data = { ships, connected: true, fetchedAt: Date.now() };
       localAisCache = { data, expiresAt: Date.now() + LOCAL_AIS_CACHE_MS };
+      broadcast('ships:update', data);
+      recordServiceUpdate('ships');
       res.json(data);
     } catch (err) {
       logger.error({ err }, "Failed to fetch vessels from local AIS");
@@ -247,7 +251,10 @@ router.get("/ships", async (_req, res) => {
     };
   });
 
-  res.json({ ships, connected, fetchedAt: Date.now() });
+  const data = { ships, connected, fetchedAt: Date.now() };
+  broadcast('ships:update', data);
+  recordServiceUpdate('ships');
+  res.json(data);
 });
 
 export default router;

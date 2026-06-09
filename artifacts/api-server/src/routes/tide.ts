@@ -1,4 +1,6 @@
 import { Router } from "express";
+import { broadcast } from "../services/ws-hub";
+import { recordServiceUpdate } from "../services/registry";
 
 const router = Router();
 
@@ -110,6 +112,8 @@ router.get("/tide", async (req, res) => {
       fetchedAt: Date.now(),
     };
     cache = { data, expiresAt: Date.now() + CACHE_MS };
+    broadcast('tide:update', data);
+    recordServiceUpdate('tide');
     res.json(data);
   } catch (err) {
     req.log.error({ err }, "Failed to fetch tide data");

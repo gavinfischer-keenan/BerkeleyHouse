@@ -1,4 +1,6 @@
 import { Router } from "express";
+import { broadcast } from "../services/ws-hub";
+import { recordServiceUpdate } from "../services/registry";
 
 const router = Router();
 
@@ -64,7 +66,10 @@ router.get("/buoys", async (req, res) => {
       return { id: BUOYS[i].id, name: BUOYS[i].name, error: "unavailable" };
     });
 
-    res.json({ buoys, fetchedAt: Date.now() });
+    const data = { buoys, fetchedAt: Date.now() };
+    broadcast('buoys:update', data);
+    recordServiceUpdate('buoys');
+    res.json(data);
   } catch (err) {
     req.log.error({ err }, "Failed to fetch buoys");
     res.status(502).json({ error: "Failed to fetch buoy data" });

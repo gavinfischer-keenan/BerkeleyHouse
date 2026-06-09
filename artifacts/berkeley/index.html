@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Berkeley Command Center</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
-    <link rel="stylesheet" href="/static/style.css?v=24">
+    <link rel="stylesheet" href="/static/style.css?v=25">
 </head>
 <body>
     <div id="viewport-scaler">
@@ -26,12 +26,20 @@
         <div id="bottom-traffic-hud">
             <div id="bottom-traffic-content"></div>
         </div>
+
+        <!-- WebSocket status indicator -->
+        <div id="ws-status" style="position:absolute; bottom:4px; left:4px; z-index:9999; font-size:9px; font-family:monospace; color:#636e72; pointer-events:none;">
+            <span id="ws-dot" style="display:inline-block; width:6px; height:6px; border-radius:50%; background:#636e72; margin-right:3px; vertical-align:middle;"></span>
+            <span id="ws-label">WS: INIT</span>
+        </div>
     </div>
+
     <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
-    <script src="/static/script.js?v=61" defer></script>
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+    <script src="/static/modules/data-bus.js?v=1"></script>
+    <script src="/static/script.js?v=62" defer></script>
 </body>
-
-
+</html>
 
 
 

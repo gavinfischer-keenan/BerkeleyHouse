@@ -15,6 +15,27 @@ function applyScale() {
 window.addEventListener('resize', applyScale);
 applyScale();
 
+// --- WEBSOCKET DATA BUS ---
+// Initialize the real-time data bus (Socket.IO connection to server)
+if (window.dataBus) {
+    window.dataBus.init();
+    // Update WebSocket status indicator
+    setInterval(() => {
+        const dot = document.getElementById('ws-dot');
+        const label = document.getElementById('ws-label');
+        if (!dot || !label) return;
+        if (window.dataBus.isConnected()) {
+            dot.style.background = '#1dd1a1';
+            label.textContent = 'WS: LIVE';
+            label.style.color = '#1dd1a1';
+        } else {
+            dot.style.background = '#ff6b6b';
+            label.textContent = 'WS: POLL';
+            label.style.color = '#ff6b6b';
+        }
+    }, 3000);
+}
+
 // --- MAP SETUP ---
 const bounds = [[37.45, -122.65], [38.10, -122.10]];
 

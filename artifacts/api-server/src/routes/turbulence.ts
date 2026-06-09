@@ -1,4 +1,6 @@
 import { Router } from "express";
+import { broadcast } from "../services/ws-hub";
+import { recordServiceUpdate } from "../services/registry";
 
 const router = Router();
 
@@ -42,6 +44,8 @@ router.get("/turbulence", async (req, res) => {
 
     const data = { turbulence, fetchedAt: Date.now() };
     cache = { data, expiresAt: Date.now() + CACHE_MS };
+    broadcast('turbulence:update', data);
+    recordServiceUpdate('turbulence');
     res.json(data);
   } catch (err) {
     req.log.error({ err }, "Failed to fetch turbulence");

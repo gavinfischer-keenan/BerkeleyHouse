@@ -1,6 +1,8 @@
 import { Router } from "express";
 import { logAircraftObservation, getAircraftMeta, setAircraftImage } from "../db";
 import { logger } from "../lib/logger";
+import { broadcast } from "../services/ws-hub";
+import { recordServiceUpdate } from "../services/registry";
 
 const router = Router();
 
@@ -203,6 +205,8 @@ router.get("/aircraft", async (req, res) => {
 
     const data = { aircraft: enriched, fetchedAt: Date.now(), dataTime: raw.now ?? null };
     cache = { data, expiresAt: Date.now() + CACHE_MS };
+    broadcast('aircraft:update', data);
+    recordServiceUpdate('aircraft');
     res.json(data);
   } catch (err) {
     req.log.error({ err }, "Failed to fetch aircraft");

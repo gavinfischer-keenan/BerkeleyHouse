@@ -1,4 +1,6 @@
 import { Router } from "express";
+import { broadcast } from "../services/ws-hub";
+import { recordServiceUpdate } from "../services/registry";
 
 const router = Router();
 
@@ -78,6 +80,8 @@ router.get("/weather", async (req, res) => {
     };
 
     cache = { data, expiresAt: Date.now() + CACHE_MS };
+    broadcast('weather:update', data);
+    recordServiceUpdate('weather');
     res.json(data);
   } catch (err) {
     req.log.error({ err }, "Failed to fetch weather");

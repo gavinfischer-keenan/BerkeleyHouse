@@ -14,6 +14,7 @@ import tideRouter from "./tide";
 import turbulenceRouter from "./turbulence";
 import airportRouter from "./airport";
 import photosRouter from "./photos";
+import servicesRouter from "./services";
 import { uploadRouter } from "./upload.js";
 
 const router: IRouter = Router();
@@ -34,6 +35,7 @@ router.use(turbulenceRouter);
 router.use(airportRouter);
 router.use("/photos", photosRouter);
 router.use("/upload", uploadRouter);
+router.use(servicesRouter);  // /api/services + /api/ingest + /api/ws-status
 
 export default router;
 

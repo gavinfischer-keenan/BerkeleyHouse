@@ -1,4 +1,6 @@
 import { Router } from "express";
+import { broadcast } from "../services/ws-hub";
+import { recordServiceUpdate } from "../services/registry";
 
 const router = Router();
 
@@ -81,6 +83,8 @@ router.get("/airquality", async (req, res) => {
 
     const data = { sensors, fetchedAt: Date.now() };
     cache = { data, expiresAt: Date.now() + CACHE_MS };
+    broadcast('airquality:update', data);
+    recordServiceUpdate('airquality');
     res.json(data);
   } catch (err) {
     req.log.error({ err }, "Failed to fetch air quality");
