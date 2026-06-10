@@ -944,6 +944,24 @@ body.low-perf #forecast-box {
     text-transform: uppercase;
 }
 
+/* Repeating pulsing alert text */
+.eq-alert-repeat {
+    font-size: 28px;
+    font-weight: 900;
+    color: #fff;
+    letter-spacing: 4px;
+    text-transform: uppercase;
+    text-shadow: 0 0 20px rgba(255,255,255,0.8), 0 0 40px rgba(255,0,0,0.6);
+    animation: eq-text-pulse 1s ease-in-out infinite;
+    margin-top: 8px;
+    margin-bottom: 8px;
+}
+
+@keyframes eq-text-pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50%      { opacity: 0.5; transform: scale(1.05); }
+}
+
 /* Hazard panel content override — allow more items visible */
 #overlay-container.state-hazard #panel-content {
     max-height: 320px;

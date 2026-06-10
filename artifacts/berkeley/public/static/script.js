@@ -1427,19 +1427,26 @@ function handleLocalQuakeAlert(alert) {
     const sWaveStr = alert.seconds_until_s_wave != null ? ` · S-wave: ${alert.seconds_until_s_wave.toFixed(0)}s` : '';
     _localQuakeMarker.bindTooltip(`🔴 LOCAL DETECT: ${magStr}${distStr}${sWaveStr}`, { permanent: true, className: 'poi-label', direction: 'top', offset: [0, -markerSize/2] });
 
-    // Show urgency overlay for warning/critical
-    if (sev === 'warning' || sev === 'critical') {
-        showLocalQuakeOverlay(alert);
-    }
+    // Show urgency overlay for ANY severity — persistent until shaking is done
+    showLocalQuakeOverlay(alert);
 
     // Auto-clear marker after 5 minutes
     setTimeout(() => {
         if (_localQuakeMarker) { quakeLayer.removeLayer(_localQuakeMarker); _localQuakeMarker = null; }
     }, 5 * 60 * 1000);
+
+    // Listen for alert cancellation/expiry to dismiss overlay
+    if (alert.status === 'cancelled' || alert.status === 'expired') {
+        dismissQuakeOverlay();
+    }
 }
+
+let _quakeOverlayCountdownInterval = null;
 
 function showLocalQuakeOverlay(alert) {
     if (_localQuakeOverlayTimer) clearTimeout(_localQuakeOverlayTimer);
+    if (_quakeOverlayCountdownInterval) clearInterval(_quakeOverlayCountdownInterval);
+
     let overlay = document.getElementById('local-quake-overlay');
     if (!overlay) {
         overlay = document.createElement('div');
@@ -1448,19 +1455,46 @@ function showLocalQuakeOverlay(alert) {
         document.getElementById('viewport-scaler').appendChild(overlay);
     }
     const magStr = alert.estimated_magnitude != null ? alert.estimated_magnitude.toFixed(1) : '?';
-    const sWaveCountdown = alert.seconds_until_s_wave != null ? `<div class="eq-countdown">S-WAVE IN: <span style="font-size:1.4em;">${Math.ceil(alert.seconds_until_s_wave)}s</span></div>` : '';
+    const sev = alert.severity || 'info';
+    const sArrivalEpoch = alert.estimated_s_arrival || null;
+
     overlay.innerHTML = `
         <div class="eq-alert-icon">⚠️</div>
-        <div class="eq-alert-title">EARTHQUAKE DETECTED</div>
+        <div class="eq-alert-title">EARTHQUAKE EXPECTED</div>
         <div class="eq-alert-mag">M${magStr}</div>
-        ${sWaveCountdown}
-        <div class="eq-alert-meta">${alert.detection_method || 'STA/LTA'} · ${alert.station || 'R1A3D'}</div>
+        <div id="eq-swave-countdown" class="eq-countdown"></div>
+        <div class="eq-alert-repeat">EARTHQUAKE EXPECTED</div>
+        <div class="eq-alert-meta">${alert.detection_method || 'STA/LTA'} · ${alert.station || 'R1A3D'} · ${sev.toUpperCase()}</div>
     `;
     overlay.style.display = 'flex';
-    // Auto-hide after 15 seconds
+
+    // Live S-wave countdown timer
+    const countdownEl = document.getElementById('eq-swave-countdown');
+    if (sArrivalEpoch && countdownEl) {
+        _quakeOverlayCountdownInterval = setInterval(() => {
+            const remaining = sArrivalEpoch - (Date.now() / 1000);
+            if (remaining > 0) {
+                countdownEl.innerHTML = `S-WAVE IN: <span style="font-size:1.4em;">${Math.ceil(remaining)}s</span>`;
+            } else if (remaining > -30) {
+                countdownEl.innerHTML = `<span style="color:#ff0000;font-weight:900;">⚡ SHAKING IN PROGRESS ⚡</span>`;
+            } else {
+                countdownEl.innerHTML = `<span style="color:#ffd32a;">SHAKING SUBSIDING</span>`;
+            }
+        }, 250);
+    }
+
+    // Safety timeout — dismiss after 2 minutes maximum (covers full event cycle)
     _localQuakeOverlayTimer = setTimeout(() => {
-        overlay.style.display = 'none';
-    }, 15000);
+        dismissQuakeOverlay();
+    }, 120000);
+}
+
+function dismissQuakeOverlay() {
+    const overlay = document.getElementById('local-quake-overlay');
+    if (overlay) overlay.style.display = 'none';
+    if (_localQuakeOverlayTimer) { clearTimeout(_localQuakeOverlayTimer); _localQuakeOverlayTimer = null; }
+    if (_quakeOverlayCountdownInterval) { clearInterval(_quakeOverlayCountdownInterval); _quakeOverlayCountdownInterval = null; }
+    liveData.localQuakeAlert = null;
 }
 
 function getEngineStatusHtml() {
