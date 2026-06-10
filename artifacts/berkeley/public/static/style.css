@@ -852,3 +852,99 @@ body.low-perf #forecast-box {
     object-fit: cover;
     border: 1px solid rgba(255,255,255,0.2);
 }
+
+/* ── EARTHQUAKE PREDICTION ENGINE ─────────────────────────────────── */
+
+/* Local quake marker — double-ring rapid pulsing (distinct from USGS regional markers) */
+.local-quake-marker {
+    border-radius: 50%;
+    border: 3px solid;
+    background: transparent;
+    animation: local-quake-pulse 0.8s ease-out infinite;
+    position: relative;
+}
+.local-quake-marker::after {
+    content: '';
+    position: absolute;
+    top: -6px; left: -6px; right: -6px; bottom: -6px;
+    border-radius: 50%;
+    border: 2px solid inherit;
+    opacity: 0.4;
+    animation: local-quake-pulse 0.8s ease-out infinite 0.3s;
+}
+
+@keyframes local-quake-pulse {
+    0%   { transform: scale(0.6); opacity: 1;   }
+    50%  { transform: scale(1.5); opacity: 0.3; }
+    100% { transform: scale(0.6); opacity: 1;   }
+}
+
+/* Full-screen earthquake alert overlay */
+.local-quake-alert {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    z-index: 9999;
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: rgba(180, 0, 0, 0.85);
+    animation: eq-flash 0.4s ease-in-out infinite alternate;
+    backdrop-filter: blur(8px);
+    pointer-events: none;
+}
+
+@keyframes eq-flash {
+    0%   { background: rgba(180, 0, 0, 0.85); }
+    100% { background: rgba(220, 20, 20, 0.65); }
+}
+
+.eq-alert-icon {
+    font-size: 64px;
+    margin-bottom: 8px;
+    filter: drop-shadow(0 0 20px rgba(255,200,0,0.8));
+}
+
+.eq-alert-title {
+    font-size: 36px;
+    font-weight: 900;
+    color: #fff;
+    letter-spacing: 6px;
+    text-transform: uppercase;
+    text-shadow: 0 0 20px rgba(255,0,0,0.8), 0 2px 4px rgba(0,0,0,0.9);
+    margin-bottom: 8px;
+}
+
+.eq-alert-mag {
+    font-size: 72px;
+    font-weight: 900;
+    color: #ffd32a;
+    font-family: monospace;
+    text-shadow: 0 0 30px rgba(255,211,42,0.6);
+    margin-bottom: 12px;
+}
+
+.eq-countdown {
+    font-size: 24px;
+    font-weight: 700;
+    color: #fff;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    background: rgba(0,0,0,0.5);
+    padding: 8px 24px;
+    border-radius: 8px;
+    border: 2px solid #ffd32a;
+    margin-bottom: 12px;
+}
+
+.eq-alert-meta {
+    font-size: 14px;
+    color: rgba(255,255,255,0.6);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+}
+
+/* Hazard panel content override — allow more items visible */
+#overlay-container.state-hazard #panel-content {
+    max-height: 320px;
+}

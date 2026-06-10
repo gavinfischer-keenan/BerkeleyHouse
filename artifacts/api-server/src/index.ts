@@ -44,6 +44,7 @@ registerService("tide", "NOAA Tides", "poll", "remote");
 registerService("turbulence", "FAA Turbulence", "poll", "remote");
 registerService("airquality", "Air Quality", "poll", "remote");
 registerService("airport", "Airport Status", "poll", "remote");
+registerService("earthquake-engine", "Earthquake Prediction Engine", "push", "local");
 
 httpServer.listen(port, () => {
   logger.info({ port }, "Server listening (HTTP + WebSocket)");

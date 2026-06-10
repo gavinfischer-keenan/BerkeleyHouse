@@ -34,6 +34,16 @@ if (window.dataBus) {
             label.style.color = '#ff6b6b';
         }
     }, 3000);
+
+    // ── EARTHQUAKE PREDICTION ENGINE — Socket.IO Listener ──────────
+    window.dataBus.on('ingest:earthquake-engine', (payload) => {
+        const d = payload.data || payload;
+        if (d.alert_type === 'earthquake') {
+            handleLocalQuakeAlert(d);
+        } else if (d.status) {
+            liveData.engineStatus = d;
+        }
+    });
 }
 
 // --- MAP SETUP ---
@@ -603,7 +613,7 @@ function pointInPolygon(point, vs) {
 // =====================================================================
 // LIVE DATA STORE
 // =====================================================================
-var liveData = { weather: null, buoys: null, quakes: null, alerts: null, turbulence: null, airquality: null, aircraft: [], ships: [], shipsConnected: false, stations: [], currents: null, tide: null };
+var liveData = { weather: null, buoys: null, quakes: null, alerts: null, turbulence: null, airquality: null, aircraft: [], ships: [], shipsConnected: false, stations: [], currents: null, tide: null, localQuakeAlert: null, engineStatus: null };
 
 let trafficHistory = {};
 const TRAIL_DURATION_MS = 30000; // 30-second trail window
@@ -1387,6 +1397,84 @@ function getQuakeItems() {
         return { mag: q.mag, place, depth: q.depth, time: q.time, color };
     });
 }
+
+// ── LOCAL EARTHQUAKE ENGINE ALERT HANDLING ─────────────────────────────
+const EQ_STATION_LAT = 37.8696;
+const EQ_STATION_LNG = -122.2491;
+let _localQuakeOverlay = null;
+let _localQuakeOverlayTimer = null;
+let _localQuakeMarker = null;
+
+function handleLocalQuakeAlert(alert) {
+    liveData.localQuakeAlert = alert;
+    console.warn('[EQ ENGINE]', alert.severity, 'alert — M' + (alert.estimated_magnitude || '?'), alert);
+
+    // Add pulsing marker at station location on the quake layer
+    if (_localQuakeMarker) quakeLayer.removeLayer(_localQuakeMarker);
+    const sev = alert.severity || 'info';
+    const markerColor = sev === 'critical' ? '#ff0000' : sev === 'warning' ? '#ff6b00' : '#ffd32a';
+    const markerSize = sev === 'critical' ? 60 : sev === 'warning' ? 45 : 30;
+    _localQuakeMarker = L.marker([EQ_STATION_LAT, EQ_STATION_LNG], {
+        pane: 'hazardPane',
+        icon: L.divIcon({
+            className: '',
+            html: `<div class="local-quake-marker" style="width:${markerSize}px;height:${markerSize}px;border-color:${markerColor};box-shadow:0 0 20px ${markerColor}, 0 0 40px ${markerColor};"></div>`,
+            iconSize: [markerSize, markerSize], iconAnchor: [markerSize/2, markerSize/2]
+        })
+    }).addTo(quakeLayer);
+    const magStr = alert.estimated_magnitude != null ? `M${alert.estimated_magnitude.toFixed(1)}` : 'P-WAVE';
+    const distStr = alert.estimated_distance_km != null ? ` · ${alert.estimated_distance_km.toFixed(0)}km` : '';
+    const sWaveStr = alert.seconds_until_s_wave != null ? ` · S-wave: ${alert.seconds_until_s_wave.toFixed(0)}s` : '';
+    _localQuakeMarker.bindTooltip(`🔴 LOCAL DETECT: ${magStr}${distStr}${sWaveStr}`, { permanent: true, className: 'poi-label', direction: 'top', offset: [0, -markerSize/2] });
+
+    // Show urgency overlay for warning/critical
+    if (sev === 'warning' || sev === 'critical') {
+        showLocalQuakeOverlay(alert);
+    }
+
+    // Auto-clear marker after 5 minutes
+    setTimeout(() => {
+        if (_localQuakeMarker) { quakeLayer.removeLayer(_localQuakeMarker); _localQuakeMarker = null; }
+    }, 5 * 60 * 1000);
+}
+
+function showLocalQuakeOverlay(alert) {
+    if (_localQuakeOverlayTimer) clearTimeout(_localQuakeOverlayTimer);
+    let overlay = document.getElementById('local-quake-overlay');
+    if (!overlay) {
+        overlay = document.createElement('div');
+        overlay.id = 'local-quake-overlay';
+        overlay.className = 'local-quake-alert';
+        document.getElementById('viewport-scaler').appendChild(overlay);
+    }
+    const magStr = alert.estimated_magnitude != null ? alert.estimated_magnitude.toFixed(1) : '?';
+    const sWaveCountdown = alert.seconds_until_s_wave != null ? `<div class="eq-countdown">S-WAVE IN: <span style="font-size:1.4em;">${Math.ceil(alert.seconds_until_s_wave)}s</span></div>` : '';
+    overlay.innerHTML = `
+        <div class="eq-alert-icon">⚠️</div>
+        <div class="eq-alert-title">EARTHQUAKE DETECTED</div>
+        <div class="eq-alert-mag">M${magStr}</div>
+        ${sWaveCountdown}
+        <div class="eq-alert-meta">${alert.detection_method || 'STA/LTA'} · ${alert.station || 'R1A3D'}</div>
+    `;
+    overlay.style.display = 'flex';
+    // Auto-hide after 15 seconds
+    _localQuakeOverlayTimer = setTimeout(() => {
+        overlay.style.display = 'none';
+    }, 15000);
+}
+
+function getEngineStatusHtml() {
+    const s = liveData.engineStatus;
+    if (!s) return '<div style="font-size:9px;color:#636e72;">Engine: AWAITING CONNECTION</div>';
+    const statusColor = s.status === 'online' ? '#1dd1a1' : s.status === 'degraded' ? '#ff9f43' : '#ee5253';
+    const rsam = s.rsam_1min != null ? s.rsam_1min.toFixed(0) : '--';
+    return `<div style="display:flex;gap:8px;align-items:center;padding:4px 0;font-size:9px;">
+        <span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:${statusColor};box-shadow:0 0 4px ${statusColor};"></span>
+        <span style="color:${statusColor};font-weight:bold;text-transform:uppercase;">EQ Engine: ${s.status}</span>
+        <span style="color:#a4b0be;">RSAM: ${rsam}</span>
+        <span style="color:#a4b0be;">Events: ${s.total_confirmed_events || 0}</span>
+    </div>`;
+}
 function renderQuakeItem(item) {
     return `<div class="data-row" style="border-left-color:${item.color};">
         <div><div class="row-primary">${item.place}</div><div class="row-secondary">${item.depth.toFixed(1)} km depth</div></div>
@@ -1885,7 +1973,39 @@ const uiStates = [
             // Airport status deferred to hazard tab (v0.4)
         }
     },
-    // 🟢 1: SURF & OCEAN – combined surf cards + buoy HUDs 🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢
+    // 🟢 1: HAZARD MONITOR – seismic, alerts, turbulence 🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢
+    {
+        id: 'state-hazard',
+        title: "HAZARD MONITOR", sub: "SEISMIC · NWS ALERTS · FAA TURBULENCE", duration: 14000,
+        layersOn:  [quakeLayer, alertLayer, hazardTextLayer, turbulenceLayer, lightningLayer],
+        layersOff: [radarLayerGroup, buoyLayer, aqiLayer, airLayer, shipLayer, denseDepthLayer],
+        renderStatic() {
+            const quakes = (liveData.quakes || []).filter(q => q.lat >= 36.5 && q.lat <= 38.5 && q.lng >= -123.5 && q.lng <= -121.5);
+            const recentCount = quakes.length;
+            const maxMag = quakes.length ? Math.max(...quakes.map(q => q.mag)) : 0;
+            const maxColor = maxMag >= 3 ? '#ee5253' : maxMag >= 2 ? '#ff9f43' : '#ffd32a';
+            const alertCount = (liveData.alerts?.alerts || []).length;
+            const localAlert = liveData.localQuakeAlert;
+            const localAlertHtml = localAlert ? `<div class="metric-box" style="border:1px solid ${localAlert.severity === 'critical' ? '#ee5253' : '#ff9f43'};">
+                <div class="metric-val" style="color:${localAlert.severity === 'critical' ? '#ee5253' : '#ff9f43'};">M${localAlert.estimated_magnitude != null ? localAlert.estimated_magnitude.toFixed(1) : '?'}</div>
+                <div class="metric-lbl">Local Detect</div>
+            </div>` : `<div class="metric-box"><div class="metric-val" style="color:#1dd1a1;">CLEAR</div><div class="metric-lbl">Local Seismo</div></div>`;
+
+            return `<div class="metric-grid">
+                <div class="metric-box"><div class="metric-val">${recentCount}</div><div class="metric-lbl">Regional Quakes</div></div>
+                <div class="metric-box"><div class="metric-val" style="color:${maxColor};">${maxMag > 0 ? 'M' + maxMag.toFixed(1) : '--'}</div><div class="metric-lbl">Max Magnitude</div></div>
+                ${localAlertHtml}
+                <div class="metric-box"><div class="metric-val">${alertCount}</div><div class="metric-lbl">NWS Alerts</div></div>
+            </div>
+            ${getEngineStatusHtml()}`;
+        },
+        getItems: getQuakeItems,
+        renderItem: renderQuakeItem,
+        pageSize: 8,
+        onEnter() { updateLegend('none'); },
+        onExit()  { updateLegend('none'); }
+    },
+    // 🟢 2: SURF & OCEAN – combined surf cards + buoy HUDs 🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢
     {
         id: 'state-surf',
         title: "SURF & OCEAN", sub: "NDBC · WAVE + BUOY + CURRENTS", duration: 13500,
