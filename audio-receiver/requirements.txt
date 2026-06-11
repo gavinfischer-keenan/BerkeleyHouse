@@ -1,0 +1,47 @@
+# =============================================================================
+# audio-receiver — Python Dependencies
+# =============================================================================
+# Install with:
+#   pip3 install -r requirements.txt
+#
+# Or inside a venv (recommended on Pi):
+#   python3 -m venv .venv
+#   source .venv/bin/activate
+#   pip3 install -r requirements.txt
+#
+# NOTE: This file covers *Python* package dependencies only.
+# System-level dependencies (ffmpeg, BirdNET-Analyzer, BatNET-Detector)
+# are documented in README.md and handled by setup.sh.
+# =============================================================================
+
+# PyYAML — parses config/microphones.yaml
+# Docs: https://pyyaml.org/wiki/PyYAMLDocumentation
+# Used by: src/main.py (config loader)
+PyYAML>=6.0,<7.0
+
+# pytest — unit test runner (development/CI only, not needed on Pi in prod)
+# Docs: https://docs.pytest.org
+# Used by: tests/test_audio_receiver.py
+# Install only on dev machines:
+#   pip3 install -r requirements.txt --extra-index-url ...
+# Or skip on Pi with: pip3 install PyYAML
+pytest>=7.0; extra == "dev"
+
+# =============================================================================
+# Standard library modules used (no install required — listed for reference):
+# =============================================================================
+#   subprocess   — ffmpeg / BirdNET / BatNET process spawning
+#   threading    — per-node capture threads + pipeline thread pool
+#   concurrent.futures.ThreadPoolExecutor — parallel analyzer dispatch
+#   urllib.request — HTTP POST to api-server ingest (zero extra deps)
+#   json         — payload serialisation / BatNET output parsing
+#   csv          — BirdNET results CSV parsing
+#   logging      — structured JSON log output
+#   signal       — SIGTERM / SIGINT graceful shutdown
+#   pathlib      — cross-platform path handling
+#   tempfile     — ephemeral WAV chunk working directories
+#   shutil       — temp dir cleanup
+#   collections.deque — O(1) ring-buffer for detection store
+#   datetime     — BirdNET week-number computation + archive path dating
+#   time         — epoch timestamps on detection payloads
+#   argparse     — --config CLI flag

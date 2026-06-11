@@ -46,6 +46,18 @@ registerService("airquality", "Air Quality", "poll", "remote");
 registerService("airport", "Airport Status", "poll", "remote");
 registerService("earthquake-engine", "Earthquake Prediction Engine", "push", "local");
 
+// ── Audio monitoring network — microphones on this Linux host ─────────────────
+// Pre-registered so these nodes appear in /api/services immediately.
+// Status and detections arrive via audio-receiver.py (same host, PM2-managed).
+// Active nodes mirror config/microphones.yaml in audio-receiver/.
+registerService("audio-front-porch", "Mic: Front Porch",   "push", "local", {}, { analyzer: "birdnet,batnet", location: "Front porch facing the street" });
+registerService("audio-shed",        "Mic: Shed",          "push", "local", {}, { analyzer: "birdnet,batnet", location: "Rear shed — open to backyard" });
+// Future nodes (disabled in microphones.yaml until hardware deployed):
+// registerService("audio-garden-east",  "Mic: East Garden",  "push", "local");
+// registerService("audio-roof-north",   "Mic: Roof North",   "push", "local");
+// registerService("audio-backyard-west","Mic: Backyard West","push", "local");
+// registerService("audio-study",        "Mic: Study",        "push", "local");
+
 httpServer.listen(port, () => {
   logger.info({ port }, "Server listening (HTTP + WebSocket)");
 });

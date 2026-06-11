@@ -7,6 +7,12 @@
  * GET  /api/services/:name/history — get data history from a push service
  * POST /api/ingest/:name          — push data from any external device/service
  * GET  /api/ws-status             — WebSocket hub status
+ *
+ * Special ingest namespaces:
+ *   audio-<nodeId>          — audio detection batches from audio-receiver.py
+ *   audio-<nodeId>-status   — node connection status from audio-receiver.py
+ * These are routed through the AudioStore for structured indexing before
+ * the generic registry handler also records them for service discovery.
  */
 
 import { Router } from "express";
@@ -17,6 +23,7 @@ import {
   getIngestHistory,
   ingestData,
 } from "../services/registry";
+import { ingestAudioPayload } from "../services/audio-store";
 import { getHubStatus, broadcast } from "../services/ws-hub";
 import { logger } from "../lib/logger";
 
@@ -71,7 +78,19 @@ router.post("/ingest/:name", (req, res) => {
   }
 
   try {
+    // ── Audio network: structured ingest via AudioStore ──────────────────
+    // Services named `audio-<nodeId>` or `audio-<nodeId>-status` are posted
+    // by the audio-receiver Python service running on this same Linux host.
+    // They get full structured indexing in addition to the generic registry entry.
+    if (name.startsWith("audio-")) {
+      const nodeId = name.replace(/^audio-/, "").replace(/-status$/, "");
+      ingestAudioPayload(nodeId, data, metadata);
+    }
+
+    // Always also record in the generic service registry so these services
+    // appear in /api/services and get the standard health tracking.
     ingestData(name, data, metadata);
+
     logger.info({ service: name }, "Data ingested");
     res.json({ success: true, service: name, timestamp: Date.now() });
   } catch (err: any) {

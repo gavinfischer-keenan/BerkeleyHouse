@@ -16,6 +16,7 @@ import airportRouter from "./airport";
 import photosRouter from "./photos";
 import servicesRouter from "./services";
 import { uploadRouter } from "./upload.js";
+import audioRouter from "./audio";
 
 const router: IRouter = Router();
 
@@ -36,6 +37,7 @@ router.use(airportRouter);
 router.use("/photos", photosRouter);
 router.use("/upload", uploadRouter);
 router.use(servicesRouter);  // /api/services + /api/ingest + /api/ws-status
+router.use(audioRouter);    // /api/audio/* — Berkeley audio monitoring network
 
 export default router;
 

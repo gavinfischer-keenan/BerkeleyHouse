@@ -1,0 +1,19 @@
+# Python virtual environments
+.venv/
+venv/
+ENV/
+env/
+
+# Python bytecode and caches
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Local data and logs
+data/
+*.wav
+*.log
