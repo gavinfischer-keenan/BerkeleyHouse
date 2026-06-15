@@ -28,7 +28,25 @@ let io: SocketServer | null = null;
 export function initWebSocketHub(httpServer: HttpServer): SocketServer {
   io = new SocketServer(httpServer, {
     cors: {
-      origin: "*",
+      // Mirror the Express CORS allowlist — LAN subnets + localhost.
+      // Same-origin requests (kiosk on same host) have no Origin header
+      // and are permitted by default. CORS_ORIGINS env var can extend.
+      origin(origin, callback) {
+        if (!origin) return callback(null, true); // same-origin or curl
+        const extraOrigins = (process.env.CORS_ORIGINS ?? "")
+          .split(",")
+          .map((s) => s.trim())
+          .filter(Boolean);
+        const allowed = [
+          "http://localhost:3000",
+          "http://localhost:3001",
+          "http://localhost:5050",
+          "http://home.mosswood.internal",
+          ...extraOrigins,
+        ].some((o) => o === origin) ||
+          /^http:\/\/(192\.168|10)\.[\d.]+(?::\d+)?$/.test(origin);
+        callback(allowed ? null : new Error(`WS CORS blocked: ${origin}`), allowed);
+      },
       methods: ["GET", "POST"],
     },
     // Reduce overhead for kiosk display (single client)

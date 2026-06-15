@@ -30,7 +30,41 @@ app.use(
     },
   }),
 );
-app.use(cors());
+// CORS allowlist — restrict to LAN (Mosswood network) and localhost.
+// In production this server sits behind nginx which gates external access,
+// but defense-in-depth means the Express layer should also be locked down.
+// CORS_ORIGINS env var can add extra origins (comma-separated) when needed.
+const DEFAULT_ORIGINS = [
+  "http://localhost:3000",
+  "http://localhost:3001",
+  "http://localhost:5050",
+  "http://home.mosswood.internal",
+  // LAN subnet (Node 01 and Pi kiosk)
+  /^http:\/\/192\.168\.\d{1,3}\.\d{1,3}(:\d+)?$/,
+  /^http:\/\/10\.\d{1,3}\.\d{1,3}\.\d{1,3}(:\d+)?$/,
+];
+const extraOrigins = (process.env.CORS_ORIGINS ?? "")
+  .split(",")
+  .map((s) => s.trim())
+  .filter(Boolean);
+const ALLOWED_ORIGINS = [...DEFAULT_ORIGINS, ...extraOrigins];
+
+app.use(
+  cors({
+    origin(origin, callback) {
+      // Allow requests with no Origin header (same-origin, curl, Postman)
+      if (!origin) return callback(null, true);
+      const allowed = ALLOWED_ORIGINS.some((o) =>
+        typeof o === "string" ? o === origin : o.test(origin),
+      );
+      if (allowed) return callback(null, true);
+      logger.warn({ origin }, "CORS blocked request");
+      callback(new Error(`CORS: origin '${origin}' not allowed`));
+    },
+    methods: ["GET", "POST", "OPTIONS"],
+    credentials: false,
+  }),
+);
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ limit: "10mb", extended: true }));
 

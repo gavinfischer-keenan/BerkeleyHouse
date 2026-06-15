@@ -120,8 +120,7 @@ var superDenseDepthLayer = L.layerGroup();
 var sparseDepthLayer = L.layerGroup();
 var deepOceanAirLayer = L.featureGroup();
 
-// ROMS temperature layer removed — Hawaii-specific model not applicable to SF Bay Area
-var romsTempLayer = L.layerGroup([]);
+// ROMS temperature layer — removed (Hawaii-specific model)
 
 // --- HAZARD TEXT LAYER SET UP LATER ---
 
@@ -190,18 +189,15 @@ async function refreshRadar() {
 refreshRadar();
 setInterval(refreshRadar, 5 * 60 * 1000);
 
-// --- SEEDED RNG — depth numbers stay identical every page load ---
-function makeSeededRng(seed) {
-    let s = seed >>> 0;
-    return function() { s = Math.imul(1664525, s) + 1013904223 >>> 0; return s / 0xFFFFFFFF; };
-}
-const rng = makeSeededRng(0xABCDEF42);
-
-// --- LAND MASK — cleared for SF Bay Area (no offshore depth masking needed) ---
+// --- LAND MASK ---
+// ISLAND_POLYS is empty for the SF Bay Area view; no offshore depth masking is
+// needed. pointInPoly is retained for alert geometry that may use it in future.
 const ISLAND_POLYS = [];
 
-// --- POPULATE HAZARD TEXT LAYER ---
+// --- HAZARD AREA OUTLINES ---
 const ISLAND_OUTLINES = {};
+
+// Point-in-polygon (ray-casting). Used by alert layer geometry checks.
 function pointInPoly(lat, lng, poly) {
     let inside = false;
     for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
@@ -213,74 +209,12 @@ function pointInPoly(lat, lng, poly) {
     }
     return inside;
 }
-function isOnLand(lat, lng) {
-    for (const poly of ISLAND_POLYS) if (pointInPoly(lat, lng, poly)) return true;
-    return false;
-}
-// Approx squared distance from a point to a segment, using a local equirectangular plane
-// (1° lat ≈ 111 km, 1° lng ≈ 88 km at ~37.7°N).
-function _segKmSq(lat, lng, a, b) {
-    const KX = 88, KY = 111;
-    const px = lng * KX, py = lat * KY;
-    const ax = a[1] * KX, ay = a[0] * KY;
-    const bx = b[1] * KX, by = b[0] * KY;
-    const dx = bx - ax, dy = by - ay;
-    const len2 = dx * dx + dy * dy || 1e-9;
-    let t = ((px - ax) * dx + (py - ay) * dy) / len2;
-    t = Math.max(0, Math.min(1, t));
-    const cx = ax + t * dx, cy = ay + t * dy;
-    const dx2 = px - cx, dy2 = py - cy;
-    return dx2 * dx2 + dy2 * dy2;
-}
-// Shortest distance (km) from a point to the nearest coastline. Returns a large
-// default for SF Bay Area since ISLAND_POLYS is empty (no offshore masking needed).
-function distToShoreKm(lat, lng) {
-    if (!ISLAND_POLYS.length) return 999;
-    let minSq = Infinity;
-    const poly = ISLAND_POLYS[0];
-    for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
-        const dSq = _segKmSq(lat, lng, poly[j], poly[i]);
-        if (dSq < minSq) minSq = dSq;
-    }
-    return Math.sqrt(minSq);
-}
-
-
-// =====================================================================
-// DENSE BATHYMETRY — cleared for SF Bay Area (Bay-focused, not deep ocean)
-// =====================================================================
-const rngD = makeSeededRng(0xC0FFEE99);
-// Dense bathymetry grid cleared — not needed for Bay Area view
-
-// =====================================================================
-// SUPER DENSE BATHYMETRY — cleared for SF Bay Area
-// =====================================================================
-const rngSD = makeSeededRng(0xBEEFCAFE);
-// Super dense bathymetry grid cleared — not needed for Bay Area view
-
-// =====================================================================
-// SPARSE BATHYMETRY — cleared for SF Bay Area
-// =====================================================================
-const rngSparse = makeSeededRng(0xDEADBEEF);
-// Sparse bathymetry grid cleared — not needed for Bay Area view
 
 // =====================================================================
 // STATIC NOAA BUOY LABELS (always on map)
+// Populated when buoy coordinates are available.
 // =====================================================================
 var staticPoiMarkers = [];
-[
-    
-    
-    
-    
-    
-    
-].forEach(b => {
-    var marker = L.marker(b.c, { pane: 'poiPane',
-        icon: L.divIcon({ className: 'poi-label', html: b.n, iconSize: [150, 20] })
-    }).addTo(staticPoiLayer);
-    staticPoiMarkers.push({ marker: marker, w: 150, h: 20 });
-});
 
 // =====================================================================
 // STATIC AIRPORTS (only shown on Traffic views)
@@ -295,81 +229,19 @@ var staticPoiMarkers = [];
     }).addTo(airportLayer);
 });
 
-// =====================================================================
-// SURF SPOTS — animated markers on beach / land side of shoreline
-// =====================================================================
-// Coordinates adjusted so each marker sits at the beach, not offshore.
-const surfSpots = [
-    // Surf spots cleared — not applicable to SF Bay Area
-];
+// ── Marker arrays for the declutterer ─────────────────────────────────────
+var buoyMarkers    = [];  // {marker, html} — buoy labels, decluttered
+var stationMarkers = [];  // {marker, html} — NWS land stations, decluttered
+var windMarkers    = [];  // {marker, html} — forecast wind labels
+var tideMarkers    = [];  // {marker, html} — tide stations
 
-var surfMarkers = [];
-var buoyMarkers = [];     // {marker, html} — decluttered together with surf labels
-var stationMarkers = [];  // {marker, html} — NWS land stations, decluttered too
-var windMarkers = [];     // {marker, html} — forecast winds, decluttered too
-var tideMarkers = [];     // {marker, html} — tide stations
-var surfMode = 'small';   // 'small' everywhere; 'large' only in SURF & OCEAN
-
-// Large boxed card — used only in the SURF & OCEAN wave view.
-const BIG_W = 110, BIG_H = 44;
-
+// Leader line SVG helper used by buoy, tide, and station markers
 const drawLeader = (ax, ay, w, h, color) => {
     if (ax >= 0 && ax <= w && ay >= 0 && ay <= h) return '';
     let x2 = ax < 0 ? 0 : (ax > w ? w : ax);
     let y2 = ay < 0 ? 0 : (ay > h ? h : ay);
     return `<svg style="position:absolute; left:0; top:0; overflow:visible; pointer-events:none; width:1px; height:1px; z-index:-1;"><line x1="${ax}" y1="${ay}" x2="${x2}" y2="${y2}" stroke="${color}" stroke-width="1.5"/><circle cx="${ax}" cy="${ay}" r="3" fill="${color}"/></svg>`;
 };
-
-function makeSurfIconLarge(spot, heightStr, color, anchor) {
-    anchor = anchor || [BIG_W / 2, 0];
-    const cssScale = spot.cssScale || 1;
-    let leader = drawLeader(anchor[0], anchor[1], BIG_W, BIG_H, color);
-    if (spot.nudge) leader = ''; // Disable leader if using manual nudge layout
-    return L.divIcon({
-        className: '',
-        html: `<div style="position:relative; transform: scale(${cssScale}); transform-origin: top center;">${leader}<div class="surf-card" style="border-color:${color};box-shadow:0 0 10px ${color}33;">
-            <div class="surf-card-name">🏄 ${spot.name}</div>
-            <div class="surf-card-ht" style="color:${color};">${heightStr}</div>
-        </div></div>`,
-        iconSize:   [BIG_W, BIG_H],
-        iconAnchor: anchor   // center-top → card hangs below the spot
-    });
-}
-// Compact pin — the default for every other state. Fixed nominal size so the
-// declutterer can reason about collisions.
-const SMALL_W = 86, SMALL_H = 18;
-function makeSurfIconSmall(name, heightStr, color, anchor) {
-    anchor = anchor || [SMALL_W / 2, SMALL_H / 2];
-    const ht = heightStr && heightStr !== '--' ? ` <b style="color:${color};">${heightStr}</b>` : '';
-    const leader = drawLeader(anchor[0], anchor[1], SMALL_W, SMALL_H, color);
-    return L.divIcon({
-        className: '',
-        html: `<div style="position:relative;">${leader}<div class="surf-pin" style="border-color:${color};">🏄 ${name}${ht}</div></div>`,
-        iconSize:   [SMALL_W, SMALL_H],
-        iconAnchor: anchor   // centered on the spot
-    });
-}
-function initSurfMarkers() {
-    surfLayer.clearLayers();
-    surfMarkers = [];
-    surfSpots.forEach(s => {
-        const marker = L.marker(s.c, {
-            pane: 'surfPane',
-            icon: makeSurfIconSmall(s.name, '--', '#48dbfb')
-        });
-        marker.addTo(surfLayer);
-        surfMarkers.push({ marker, spot: s, heightStr: '--', color: '#48dbfb' });
-    });
-}
-initSurfMarkers();
-
-function rebuildSurfIcon(entry, anchor) {
-    if (surfMode === 'large') {
-        entry.marker.setIcon(makeSurfIconLarge(entry.spot, entry.heightStr, entry.color, anchor));
-    } else {
-        entry.marker.setIcon(makeSurfIconSmall(entry.spot.name, entry.heightStr, entry.color, anchor));
-    }
-}
 
 // ── Unified label declutter ───────────────────────────────────────────
 function _ccw(ax, ay, bx, by, cx, cy) {
@@ -407,20 +279,7 @@ function lineIntersectsRect(l, r, gap) {
 
 function declutterLabels() {
     if (!map || !map._loaded) return;
-    const large = surfMode === 'large';
     const entries = [];
-
-    if (map.hasLayer(surfLayer)) {
-        surfMarkers.forEach(e => {
-            const w = large ? BIG_W : SMALL_W, h = large ? BIG_H : SMALL_H;
-            if (large && e.spot.nudge) {
-                // Manually placed with nudges, no collision detection
-                rebuildSurfIcon(e, [w / 2 + e.spot.nudge[0], h / 2 + e.spot.nudge[1]]);
-            } else {
-                entries.push({ latlng: e.marker.getLatLng(), w, h, offsetTop: large ? 4 : -h / 2, preferred: e.spot.preferred, apply: (ax, ay) => rebuildSurfIcon(e, [ax, ay]) });
-            }
-        });
-    }
 
     if (map.hasLayer(buoyLayer)) {
         buoyMarkers.forEach(b => {
@@ -509,7 +368,7 @@ function declutterLabels() {
         e.apply(pt.x - bestCandidate.rect.x, pt.y - bestCandidate.rect.y);
     });
 }
-function setSurfMode(mode) { surfMode = mode; declutterLabels(); }
+// setSurfMode removed — no surf spots configured for SF Bay Area.
 
 // Pan/zoom transitions change the pixel layout — re-flow afterwards.
 let declutterTimeout = null;
@@ -518,23 +377,8 @@ map.on('moveend zoomend', () => {
     declutterTimeout = setTimeout(declutterLabels, 50);
 });
 
+// updateSurfLabels — kept as a thin wrapper for buoy fetch to call declutterLabels
 function updateSurfLabels(buoys) {
-    if (!buoys) { declutterLabels(); return; }
-    const byId = {};
-    buoys.forEach(b => { byId[b.id] = b; });
-    surfMarkers.forEach(entry => {
-        const buoy = byId[entry.spot.buoyId];
-        let heightStr = '--', color = '#48dbfb';
-        if (buoy && !buoy.error && buoy.waveHeight != null) {
-            const hft = buoy.waveHeight * 3.281 * (entry.spot.scale || 1.0);
-            const lo  = Math.max(1, Math.floor(hft * 0.85));
-            const hi  = Math.ceil(hft * 1.15);
-            heightStr = `${lo}-${hi}ft`;
-            color = hft > 6 ? '#ff9f43' : '#1dd1a1';
-        }
-        entry.heightStr = heightStr;
-        entry.color = color;
-    });
     declutterLabels();
 }
 
@@ -1072,53 +916,11 @@ async function fetchAirQuality() {
     } catch(e) { console.warn('AQI fetch:', e); }
 }
 
-// ─── 7-Day Ocean Beach Surf Forecast (Open-Meteo Marine API)
-async function fetchOceanSurfForecast() {
-    try {
-        const url = 'https://marine-api.open-meteo.com/v1/marine?latitude=37.76&longitude=-122.51&daily=wave_height_max&timezone=America%2FLos_Angeles';
-        const r = await fetch(url);
-        if (!r.ok) throw new Error(r.status);
-        const data = await r.json();
-        liveData.oceanSurf = data;
-    } catch(e) { console.warn('Ocean Beach surf fetch:', e); }
-}
+// fetchOceanSurfForecast removed — surf spot system not active for SF Bay Area.
 
-async function fetch7DayForecast() {
-    try {
-        const r = await fetch('https://api.weather.gov/gridpoints/MTR/88,126/forecast');
-        if (!r.ok) throw new Error(r.status);
-        const data = await r.json();
-        
-        let html = `<div id="forecast-box" style="position: absolute; top: 20px; right: 20px; z-index: 999; background: rgba(0, 0, 0, 0.75); border: 1px solid rgba(255, 255, 255, 0.2); padding: 15px; border-radius: 8px; color: #fff; width: 320px; backdrop-filter: blur(8px); display: none; box-shadow: 0 4px 15px rgba(0,0,0,0.6);">
-            <div style="font-size: 14px; font-weight: bold; color: #4facfe; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 1px;">7-Day Forecast</div>
-            <div style="display: flex; flex-direction: column; gap: 8px;">`;
-            
-        const periods = data.properties.periods;
-        let dayCount = 0;
-        for (let i = 0; i < periods.length && dayCount < 7; i++) {
-            const p = periods[i];
-            // Show today's remainder, and then daytime for the next 6 days
-            if (p.isDaytime || i === 0) { 
-                html += `<div style="display: flex; justify-content: space-between; align-items: center; font-size: 12px; border-bottom: 1px solid rgba(255,255,255,0.1); padding: 6px 0;">
-                    <div style="font-weight: bold; width: 90px; color: #dfe6e9; flex-shrink: 0;">${p.name.replace('This Afternoon', 'Today').replace('Tonight', 'Tonight')}</div>
-                    <div style="flex: 1; margin: 0 10px; color: #b2bec3; line-height: 1.3;" title="${p.shortForecast}">${p.shortForecast}</div>
-                    <div style="font-weight: bold; color: ${p.isDaytime ? '#ff9f43' : '#74b9ff'}; flex-shrink: 0;">${p.temperature}°</div>
-                </div>`;
-                dayCount++;
-            }
-        }
-        
-        html += `</div></div>`;
-        
-        let el = document.getElementById('forecast-container');
-        if (!el) {
-            el = document.createElement('div');
-            el.id = 'forecast-container';
-            document.getElementById('viewport-scaler').appendChild(el);
-        }
-        el.innerHTML = html;
-    } catch(e) { console.warn('Forecast fetch:', e); }
-}
+// fetch7DayForecast removed — box was display:none and no panel toggle was wired.
+// The 7-day data is available via /api/weather (hourly property). Wire to a
+// panel toggle when a forecast panel is added to the kiosk UI.
 
 // ─── Real aircraft from ADS-B (adsb.fi, 60s cache on server)
 // Classification: helicopter / small GA / airliner based on acType + altitude + speed.
