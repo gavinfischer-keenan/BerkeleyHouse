@@ -1,11 +1,11 @@
-﻿{
+{
     "name":  "workspace",
     "version":  "0.0.0",
     "license":  "MIT",
     "scripts":  {
-                    "build":  "pnpm run typecheck \u0026\u0026 pnpm -r --if-present run build",
+                    "build":  "pnpm run typecheck && pnpm -r --filter \"./artifacts/api-server\" --filter \"./artifacts/berkeley\" --if-present run build",
                     "typecheck:libs":  "tsc --build",
-                    "typecheck":  "pnpm run typecheck:libs \u0026\u0026 pnpm -r --filter \"./artifacts/**\" --filter \"./scripts\" --if-present run typecheck"
+                    "typecheck":  "pnpm run typecheck:libs && pnpm -r --filter \"./artifacts/**\" --filter \"./scripts\" --if-present run typecheck"
                 },
     "private":  true,
     "devDependencies":  {
