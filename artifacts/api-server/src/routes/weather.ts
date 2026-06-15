@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { broadcast } from "../services/ws-hub";
 import { recordServiceUpdate } from "../services/registry";
+import { makeCache } from "../lib/cache";
 
 const router = Router();
 
@@ -9,15 +10,13 @@ const router = Router();
 const LAT = "37.8799";
 const LNG = "-122.2525";
 
-let cache: { data: unknown; expiresAt: number } | null = null;
-const CACHE_MS = 10 * 60 * 1000; // 10 minutes
+const CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes
+const cache = makeCache<unknown>(CACHE_TTL_MS);
 
 router.get("/weather", async (req, res) => {
   try {
-    if (cache && Date.now() < cache.expiresAt) {
-      res.json(cache.data);
-      return;
-    }
+    const hit = cache.get();
+    if (hit) { res.json(hit); return; }
 
     // Step 1: get the forecast office + grid for this location
     const pointRes = await fetch(
@@ -79,7 +78,7 @@ router.get("/weather", async (req, res) => {
       fetchedAt: Date.now(),
     };
 
-    cache = { data, expiresAt: Date.now() + CACHE_MS };
+    cache.set(data);
     broadcast('weather:update', data);
     recordServiceUpdate('weather');
     res.json(data);

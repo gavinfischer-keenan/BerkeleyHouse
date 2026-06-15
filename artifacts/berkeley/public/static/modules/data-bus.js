@@ -71,15 +71,19 @@ class DataBus {
   on(channel, handler) {
     if (!this.listeners.has(channel)) {
       this.listeners.set(channel, []);
+
+      // Only wire a new socket.on when this is the FIRST handler for this channel.
+      // Subsequent handlers are dispatched by the existing socket listener below.
+      if (this.socket) {
+        this.socket.on(channel, (data) => {
+          const handlers = this.listeners.get(channel) ?? [];
+          handlers.forEach(fn => {
+            try { fn(data); } catch(e) { console.error(`[DataBus] Handler error on ${channel}:`, e); }
+          });
+        });
+      }
     }
     this.listeners.get(channel).push(handler);
-
-    // If socket is already connected, wire this new channel
-    if (this.socket) {
-      this.socket.on(channel, (data) => {
-        try { handler(data); } catch(e) { console.error(`[DataBus] Handler error on ${channel}:`, e); }
-      });
-    }
   }
 
   /** Remove a listener */

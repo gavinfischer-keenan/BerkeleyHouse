@@ -35,15 +35,21 @@ if (window.dataBus) {
         }
     }, 3000);
 
-    // ── EARTHQUAKE PREDICTION ENGINE — Socket.IO Listener ──────────
-    window.dataBus.on('ingest:earthquake-engine', (payload) => {
+    // ── EARTHQUAKE PREDICTION ENGINE — Socket.IO Listeners ─────────
+    // Listen on both names: 'earthquake-engine' (registered in index.ts)
+    // and 'eqengine-alert' (posted by BerkeleyMQTTBridge). The ingest
+    // route re-broadcasts eqengine-alert on the earthquake-engine channel
+    // too, but this second listener is belt-and-suspenders.
+    function _handleEqPayload(payload) {
         const d = payload.data || payload;
-        if (d.alert_type === 'earthquake') {
+        if (d.alert_type === 'earthquake' || d._local) {
             handleLocalQuakeAlert(d);
         } else if (d.status) {
             liveData.engineStatus = d;
         }
-    });
+    }
+    window.dataBus.on('ingest:earthquake-engine', _handleEqPayload);
+    window.dataBus.on('ingest:eqengine-alert',    _handleEqPayload);
 }
 
 // --- MAP SETUP ---
@@ -533,31 +539,38 @@ function updateSurfLabels(buoys) {
 }
 
 // =====================================================================
-// WIND VECTORS — populated live from PacIOOS WRF ERDDAP
+// WIND VECTORS — Open-Meteo Forecast API (SF Bay Area grid, free, keyless)
+// Covers 37.4°N–38.2°N / 123.0°W–121.8°W at 0.25° resolution (~28 km)
 async function fetchWind() {
     try {
-        const r = await fetch("https://pae-paha.pacioos.hawaii.edu/erddap/griddap/wrf_hi.json?Uwind[(last)][(18.5):3:(22.5)][(-160.5):3:(-154.5)],Vwind[(last)][(18.5):3:(22.5)][(-160.5):3:(-154.5)]");
+        // Fetch 10 m wind components for a grid covering the SF Bay Area.
+        // Open-Meteo returns current_weather; for a grid we use hourly and
+        // pick the first (current) hour. Resolution: ~6 points across the bay.
+        const LATS = [37.5, 37.75, 38.0];
+        const LNGS = [-122.9, -122.5, -122.2, -121.9];
+        const pairs = LATS.flatMap(lat => LNGS.map(lng => ({ lat, lng })));
+        const latStr = pairs.map(p => p.lat).join(',');
+        const lngStr = pairs.map(p => p.lng).join(',');
+        const url = `https://api.open-meteo.com/v1/forecast?latitude=${latStr}&longitude=${lngStr}` +
+            `&hourly=wind_speed_10m,wind_direction_10m&wind_speed_unit=ms&timezone=America%2FLos_Angeles&forecast_hours=1`;
+        const r = await fetch(url);
         if (!r.ok) throw new Error(r.status);
-        const data = await r.json();
-        
+        const results = await r.json();
+        // Open-Meteo returns array when multiple coordinates given
+        const arr = Array.isArray(results) ? results : [results];
+
         windLayer.clearLayers();
-        
-        for (const row of data.table.rows) {
-            const lat = row[1];
-            const lng = row[2];
-            const u = row[3];
-            const v = row[4];
-            
-            if (u == null || v == null) continue;
-            // Removed land masking as requested by user
-            
-            const speed_ms = Math.sqrt(u*u + v*v);
+        arr.forEach((d, i) => {
+            const speed_ms  = d.hourly?.wind_speed_10m?.[0];
+            const dir_deg   = d.hourly?.wind_direction_10m?.[0];
+            if (speed_ms == null || dir_deg == null) return;
             const speed_mph = speed_ms * 2.23694;
-            
-            let color = '#0055ff'; // 0-3
-            if (speed_mph > 3) color = '#00aaff';
-            if (speed_mph > 6) color = '#00ffff';
-            if (speed_mph > 9) color = '#55ffaa';
+            const { lat, lng } = pairs[i];
+
+            let color = '#0055ff';
+            if (speed_mph >  3) color = '#00aaff';
+            if (speed_mph >  6) color = '#00ffff';
+            if (speed_mph >  9) color = '#55ffaa';
             if (speed_mph > 12) color = '#aaff55';
             if (speed_mph > 15) color = '#ffff00';
             if (speed_mph > 18) color = '#ffaa00';
@@ -565,42 +578,30 @@ async function fetchWind() {
             if (speed_mph > 24) color = '#ff0000';
             if (speed_mph > 27) color = '#cc0000';
 
-            const angle = Math.atan2(u, v) * (180 / Math.PI);
-            
+            // Open-Meteo wind_direction is the direction FROM which wind blows
+            // (meteorological). SVG arrow should point in the direction of flow.
+            const angle = (dir_deg + 180) % 360;
+
             const svgIcon = L.divIcon({
                 html: `<svg viewBox="0 0 24 24" style="width:26px;height:26px;transform:rotate(${angle}deg); overflow:visible;">
-                    <!-- Thick dark outline for contrast -->
                     <path d="M12 2L12 22M12 2L7 7M12 2L17 7" stroke="rgba(0,0,0,0.8)" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
-                    <!-- Bright inner stroke -->
                     <path d="M12 2L12 22M12 2L7 7M12 2L17 7" stroke="${color}" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
                 </svg>`,
                 className: '',
                 iconSize: [26, 26],
                 iconAnchor: [13, 13]
             });
-            
             L.marker([lat, lng], { icon: svgIcon, interactive: false }).addTo(windLayer);
-        }
+        });
     } catch(e) { console.warn('Wind fetch:', e); }
 }
 
+// pointInPoly (consolidated — was duplicated as pointInPolygon below)
 function isPointInPolygons(lat, lng, polys) {
     for (const poly of polys) {
-        if (pointInPolygon([lat, lng], poly)) return true;
+        if (pointInPoly(lat, lng, poly)) return true;
     }
     return false;
-}
-
-function pointInPolygon(point, vs) {
-    let x = point[0], y = point[1];
-    let inside = false;
-    for (let i = 0, j = vs.length - 1; i < vs.length; j = i++) {
-        let xi = vs[i][0], yi = vs[i][1];
-        let xj = vs[j][0], yj = vs[j][1];
-        let intersect = ((yi > y) != (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi) + xi);
-        if (intersect) inside = !inside;
-    }
-    return inside;
 }
 
 // Ocean currents: REMOVED — no free real-time current API available

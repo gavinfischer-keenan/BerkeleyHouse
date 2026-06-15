@@ -70,26 +70,37 @@ router.get("/services/:name/history", (req, res) => {
 // Generic data ingest — any device can POST data here
 router.post("/ingest/:name", (req, res) => {
   const name = req.params.name;
-  const { data, metadata } = req.body;
 
-  if (!data) {
-    res.status(400).json({ error: "Request body must include a 'data' field" });
+  // Accept two payload shapes:
+  //   { data: {...}, metadata: {...} }  — audio-receiver and structured senders
+  //   { ...flat payload... }           — BerkeleyMQTTBridge and simple senders
+  const hasDataField = req.body != null && typeof req.body === "object" && "data" in req.body;
+  const data: unknown     = hasDataField ? req.body.data     : req.body;
+  const metadata: unknown = hasDataField ? req.body.metadata : undefined;
+
+  if (data == null) {
+    res.status(400).json({ error: "Empty request body" });
     return;
   }
 
   try {
     // ── Audio network: structured ingest via AudioStore ──────────────────
-    // Services named `audio-<nodeId>` or `audio-<nodeId>-status` are posted
-    // by the audio-receiver Python service running on this same Linux host.
-    // They get full structured indexing in addition to the generic registry entry.
     if (name.startsWith("audio-")) {
       const nodeId = name.replace(/^audio-/, "").replace(/-status$/, "");
       ingestAudioPayload(nodeId, data, metadata);
     }
 
+    // ── EQ engine alert: broadcast on the earthquake-engine channel ──────
+    // BerkeleyMQTTBridge posts to eqengine-alert; the frontend listens on
+    // ingest:earthquake-engine (registered in index.ts). Re-broadcast on
+    // both so both the legacy name and the bridge name work.
+    if (name === "eqengine-alert") {
+      broadcast("ingest:earthquake-engine", { data, timestamp: Date.now() });
+    }
+
     // Always also record in the generic service registry so these services
     // appear in /api/services and get the standard health tracking.
-    ingestData(name, data, metadata);
+    ingestData(name, data, metadata as Record<string, any> | undefined);
 
     logger.info({ service: name }, "Data ingested");
     res.json({ success: true, service: name, timestamp: Date.now() });

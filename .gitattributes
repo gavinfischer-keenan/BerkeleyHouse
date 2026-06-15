@@ -1,0 +1,13 @@
+# Force LF line endings in all text files checked into the repo.
+# This prevents CRLF/LF mixing when editing on Windows.
+* text=auto eol=lf
+
+# Explicit overrides for binary types
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.ico  binary
+*.woff binary
+*.woff2 binary
+*.ttf  binary
+*.otf  binary

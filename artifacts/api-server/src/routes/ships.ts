@@ -190,6 +190,18 @@ if (AIS_SOURCE !== "local") {
   connect();
 }
 
+// Purge vessels not seen in >20 min, regardless of whether GET /api/ships is
+// being called. Prevents the Map from growing unbounded during long uptime.
+const VESSEL_STALE_MS = 20 * 60 * 1000;
+setInterval(() => {
+  const cutoff = Date.now() - VESSEL_STALE_MS;
+  let purged = 0;
+  for (const [mmsi, v] of vessels) {
+    if (v.updatedAt < cutoff) { vessels.delete(mmsi); purged++; }
+  }
+  if (purged > 0) logger.debug({ purged }, "Purged stale AIS vessels");
+}, 5 * 60 * 1000); // run every 5 min
+
 router.get("/ships", async (_req, res) => {
   // ── Local AIS source path ──────────────────────────────────────────────
   if (AIS_SOURCE === "local") {
@@ -234,13 +246,6 @@ router.get("/ships", async (_req, res) => {
   // Retry if the socket dropped between requests.
   if (!connected && !connecting) connect();
 
-  // Drop stale entries (> 20 min) from the cache itself, not just the output,
-  // so the vessel Map can't grow unbounded over long server uptime.
-  const cutoff = Date.now() - 20 * 60 * 1000;
-  for (const [mmsi, v] of vessels) {
-    if (v.updatedAt < cutoff) vessels.delete(mmsi);
-  }
-  
   const ships = [...vessels.values()].map(v => {
     const meta = getVesselMeta(v.mmsi);
     return {

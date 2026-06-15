@@ -1,11 +1,11 @@
 import { Router } from "express";
 import { broadcast } from "../services/ws-hub";
 import { recordServiceUpdate } from "../services/registry";
+import { makeCache } from "../lib/cache";
 
 const router = Router();
 
-let cache: { data: unknown; expiresAt: number } | null = null;
-const CACHE_MS = 15 * 60 * 1000;
+const cache = makeCache<unknown>(15 * 60 * 1000); // 15 min TTL
 
 // SF Bay Area monitoring points. Open-Meteo Air Quality API is keyless,
 // global, and returns the US AQI plus pollutant concentrations per lat/lng.
@@ -45,10 +45,8 @@ function dominantPol(c: OMCurrent): string {
 
 router.get("/airquality", async (req, res) => {
   try {
-    if (cache && Date.now() < cache.expiresAt) {
-      res.json(cache.data);
-      return;
-    }
+    const hit = cache.get();
+    if (hit) { res.json(hit); return; }
 
     const lats = POINTS.map((p) => p.lat).join(",");
     const lngs = POINTS.map((p) => p.lng).join(",");
@@ -82,7 +80,7 @@ router.get("/airquality", async (req, res) => {
     });
 
     const data = { sensors, fetchedAt: Date.now() };
-    cache = { data, expiresAt: Date.now() + CACHE_MS };
+    cache.set(data);
     broadcast('airquality:update', data);
     recordServiceUpdate('airquality');
     res.json(data);

@@ -1,18 +1,16 @@
 import { Router } from "express";
 import { broadcast } from "../services/ws-hub";
 import { recordServiceUpdate } from "../services/registry";
+import { makeCache } from "../lib/cache";
 
 const router = Router();
 
-let cache: { data: unknown; expiresAt: number } | null = null;
-const CACHE_MS = 5 * 60 * 1000;
+const cache = makeCache<unknown>(5 * 60 * 1000); // 5 min TTL
 
 router.get("/alerts", async (req, res) => {
   try {
-    if (cache && Date.now() < cache.expiresAt) {
-      res.json(cache.data);
-      return;
-    }
+    const hit = cache.get();
+    if (hit) { res.json(hit); return; }
 
     // Fetch active NWS alerts for SF Bay Area zones
     // CAZ508 = Berkeley/Alameda County, CAZ006 = San Francisco,
@@ -54,7 +52,7 @@ router.get("/alerts", async (req, res) => {
     }));
 
     const data = { alerts, fetchedAt: Date.now() };
-    cache = { data, expiresAt: Date.now() + CACHE_MS };
+    cache.set(data);
     broadcast('alerts:update', data);
     recordServiceUpdate('alerts');
     res.json(data);
